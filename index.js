@@ -143,11 +143,12 @@ function mainOperation(){
 			const database = await require(`./${botFunc.botIdent().activeBot.botName}/db/database`)
 			warden_vars = database
 
-			
 			if(process.env.MODE == "PROD") {
+				const evaluateMessageUpdate = 1
 				const leaderboards = ['speedrun','ace']
-				leaderboards.forEach(i => { checkLeaderboards(i) })
-				async function checkLeaderboards(leaderboard) {
+				leaderboards.forEach(i => { processMembersWithDelay(i) })
+				async function processMembersWithDelay(leaderboard) {
+					const intervalTime = evaluateMessageUpdate == 1 ? 3500 : 10
 					let unapproved_array = []
 					try {
 						const unapproved_list_values = false
@@ -156,71 +157,77 @@ function mainOperation(){
 						if (unapproved_list_response.length > 0) {
 							unapproved_array = unapproved_list_response
 						}
-					} catch (err) {
+						for (const dbInfo of unapproved_array) {
+							await processLeaderboard(dbInfo, leaderboard)
+							await new Promise(resolve => setTimeout(resolve, intervalTime))
+						}
+					}
+					catch (err) {
 						console.log(err)
 						botFunc.botLog(guild,new Discord.EmbedBuilder()
 							.setDescription('```' + err.stack + '```')
-							.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderboard})`)
+							.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderBoardType})`)
 							,2
 							,'error'
 						)
 						return
-					} 
-					// console.log(unapproved_array)
+					}
+				}
+				async function processLeaderboard(dbInfo, leaderboard) {
 					const staffChannel = process.env.STAFFCHANNELID
 					const staffChannel_obj = await guild.channels.fetch(staffChannel)
-					unapproved_array.forEach(async dbInfo => {
-						// console.log(dbInfo)
+				
+					console.log(dbInfo)
+					try {
+						const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
+						const receivedEmbed = originalMessage.embeds[0]
+						let oldEmbedSchema = {
+							title: receivedEmbed.title,
+							description: receivedEmbed.description,
+							color: receivedEmbed.color,
+							fields: receivedEmbed.fields
+						} 
+						const newEmbed = new Discord.EmbedBuilder()
+							.setTitle(oldEmbedSchema.title)
+							.setDescription(oldEmbedSchema.description)
+							.setColor(oldEmbedSchema.color)
+							.setThumbnail(botFunc.botIdent().activeBot.icon)  
+						oldEmbedSchema.fields.forEach(i => {
+							newEmbed.addFields({name: i.name, value: i.value, inline: true},)
+						})
+						const row = new Discord.ActionRowBuilder()
+							.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-approve-${dbInfo.id}`).setLabel('Approve').setStyle(Discord.ButtonStyle.Success),)
+							.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-deny-${dbInfo.id}`).setLabel('Delete').setStyle(Discord.ButtonStyle.Danger),)
+						const editedEmbed = Discord.EmbedBuilder.from(newEmbed)
+						let buttonResult = null;
+						buttonResult = await originalMessage.edit({ embeds: [editedEmbed], components: [row] })
+							
 						try {
-							const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
-							const receivedEmbed = originalMessage.embeds[0]
-							let oldEmbedSchema = {
-								title: receivedEmbed.title,
-								description: receivedEmbed.description,
-								color: receivedEmbed.color,
-								fields: receivedEmbed.fields
-							} 
-							const newEmbed = new Discord.EmbedBuilder()
-								.setTitle(oldEmbedSchema.title)
-								.setDescription(oldEmbedSchema.description)
-								.setColor(oldEmbedSchema.color)
-								.setThumbnail(botFunc.botIdent().activeBot.icon)  
-							oldEmbedSchema.fields.forEach(i => {
-								newEmbed.addFields({name: i.name, value: i.value, inline: true},)
-							})
-							const row = new Discord.ActionRowBuilder()
-								.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-approve-${dbInfo.id}`).setLabel('Approve').setStyle(Discord.ButtonStyle.Success),)
-								.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-deny-${dbInfo.id}`).setLabel('Delete').setStyle(Discord.ButtonStyle.Danger),)
-							const editedEmbed = Discord.EmbedBuilder.from(newEmbed)
-							let buttonResult = null;
-							buttonResult = await originalMessage.edit({ embeds: [editedEmbed], components: [row] })
-								
-							try {
-								const submissionUpdate_values = [dbInfo.embed_id,dbInfo.id]
-								const submissionUpdate_sql = `UPDATE ${leaderboard} SET embed_id = (?) WHERE id = (?);`
-								await database.query(submissionUpdate_sql, submissionUpdate_values)
-							} catch (err) {
-								console.log(err)
-								botFunc.botLog(guild,new Discord.EmbedBuilder()
-									.setDescription('```' + err.stack + '```')
-									.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderboard})`)
-									,2
-									,'error'
-								)
-							}
-						}
-						catch (err) {
+							const submissionUpdate_values = [dbInfo.embed_id,dbInfo.id]
+							const submissionUpdate_sql = `UPDATE ${leaderboard} SET embed_id = (?) WHERE id = (?);`
+							await database.query(submissionUpdate_sql, submissionUpdate_values)
+						} catch (err) {
 							console.log(err)
 							botFunc.botLog(guild,new Discord.EmbedBuilder()
 								.setDescription('```' + err.stack + '```')
-								.setTitle(`⛔ Fatal error experienced: checkLeaderboards(${leaderboard})`)
+								.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderboard})`)
 								,2
 								,'error'
 							)
-							return
 						}
-					})
+					}
+					catch (err) {
+						console.log(err)
+						botFunc.botLog(guild,new Discord.EmbedBuilder()
+							.setDescription('```' + err.stack + '```')
+							.setTitle(`⛔ Fatal error experienced: checkLeaderboards(${leaderboard})`)
+							,2
+							,'error'
+						)
+						return
+					}
 				}
+				
 				// Scheduled Role Backup Task
 				// cron.schedule('*/5 * * * *', function () {
 				// 	//TODO REBUILD THIS, not absolutely necessary, as people that leave the server showup in the staff channel with all previous roles.
@@ -253,6 +260,115 @@ function mainOperation(){
 				// 	}
 				// }, the_interval);
 			}
+			// if(process.env.MODE == "PROD") {
+			// 	const leaderboards = ['speedrun','ace']
+			// 	leaderboards.forEach(i => { checkLeaderboards(i) })
+			// 	async function checkLeaderboards(leaderboard) {
+			// 		let unapproved_array = []
+			// 		try {
+			// 			const unapproved_list_values = false
+			// 			const unapproved_list_sql = `SELECT id,embed_id FROM ${leaderboard} WHERE approval = (?)`
+			// 			const unapproved_list_response = await database.query(unapproved_list_sql, unapproved_list_values)
+			// 			if (unapproved_list_response.length > 0) {
+			// 				unapproved_array = unapproved_list_response
+			// 			}
+			// 		} catch (err) {
+			// 			console.log(err)
+			// 			botFunc.botLog(guild,new Discord.EmbedBuilder()
+			// 				.setDescription('```' + err.stack + '```')
+			// 				.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderboard})`)
+			// 				,2
+			// 				,'error'
+			// 			)
+			// 			return
+			// 		} 
+			// 		// console.log(unapproved_array)
+			// 		const staffChannel = process.env.STAFFCHANNELID
+			// 		const staffChannel_obj = await guild.channels.fetch(staffChannel)
+			// 		unapproved_array.forEach(async dbInfo => {
+			// 			// console.log(dbInfo)
+			// 			try {
+			// 				const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
+			// 				const receivedEmbed = originalMessage.embeds[0]
+			// 				let oldEmbedSchema = {
+			// 					title: receivedEmbed.title,
+			// 					description: receivedEmbed.description,
+			// 					color: receivedEmbed.color,
+			// 					fields: receivedEmbed.fields
+			// 				} 
+			// 				const newEmbed = new Discord.EmbedBuilder()
+			// 					.setTitle(oldEmbedSchema.title)
+			// 					.setDescription(oldEmbedSchema.description)
+			// 					.setColor(oldEmbedSchema.color)
+			// 					.setThumbnail(botFunc.botIdent().activeBot.icon)  
+			// 				oldEmbedSchema.fields.forEach(i => {
+			// 					newEmbed.addFields({name: i.name, value: i.value, inline: true},)
+			// 				})
+			// 				const row = new Discord.ActionRowBuilder()
+			// 					.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-approve-${dbInfo.id}`).setLabel('Approve').setStyle(Discord.ButtonStyle.Success),)
+			// 					.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-deny-${dbInfo.id}`).setLabel('Delete').setStyle(Discord.ButtonStyle.Danger),)
+			// 				const editedEmbed = Discord.EmbedBuilder.from(newEmbed)
+			// 				let buttonResult = null;
+			// 				buttonResult = await originalMessage.edit({ embeds: [editedEmbed], components: [row] })
+								
+			// 				try {
+			// 					const submissionUpdate_values = [dbInfo.embed_id,dbInfo.id]
+			// 					const submissionUpdate_sql = `UPDATE ${leaderboard} SET embed_id = (?) WHERE id = (?);`
+			// 					await database.query(submissionUpdate_sql, submissionUpdate_values)
+			// 				} catch (err) {
+			// 					console.log(err)
+			// 					botFunc.botLog(guild,new Discord.EmbedBuilder()
+			// 						.setDescription('```' + err.stack + '```')
+			// 						.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderboard})`)
+			// 						,2
+			// 						,'error'
+			// 					)
+			// 				}
+			// 			}
+			// 			catch (err) {
+			// 				console.log(err)
+			// 				botFunc.botLog(guild,new Discord.EmbedBuilder()
+			// 					.setDescription('```' + err.stack + '```')
+			// 					.setTitle(`⛔ Fatal error experienced: checkLeaderboards(${leaderboard})`)
+			// 					,2
+			// 					,'error'
+			// 				)
+			// 				return
+			// 			}
+			// 		})
+			// 	}
+			// 	// Scheduled Role Backup Task
+			// 	// cron.schedule('*/5 * * * *', function () {
+			// 	// 	//TODO REBUILD THIS, not absolutely necessary, as people that leave the server showup in the staff channel with all previous roles.
+			// 	// 	// backupClubRoles()
+			// 	// 	// console.log("Reminder to implement backup features for roles.")
+			// 	// });
+			// 	/**
+			// 	 * Role backup system, takes the targetted role and table and backs up to SQL database.
+			// 	 * @author  (Mgram) Marcus Ingram @MgramTheDuck
+			// 	 */
+				
+			// 	// //the following part handles the triggering of reminders
+			// 	// let minutes = 0.1, the_interval = minutes * 60 * 1000; //this sets at what interval are the reminder due times getting checked
+			// 	// setInterval(async function() {
+			// 	// 	let currentDate = new Date(Date.now());
+			
+			// 	// 	let res = await warden_vars.query("SELECT * FROM reminders WHERE duetime < $1", [currentDate]);
+			
+			// 	// 	if (res.rowCount == 0) return; //if there are no due reminders, exit the function
+			
+			// 	// 	for (let row = 0; row < res.rowCount; row++) { //send all
+			// 	// 		const channel = await bot.channels.cache.get(res.rows[row].channelid);
+			// 	// 		channel.send(`<@${res.rows[row].discid}>: ${res.rows[row].memo}`);
+			// 	// 	}
+			 
+			// 	// 	try {
+			// 	// 		res = await warden_vars.query("DELETE FROM reminders WHERE duetime < $1", [currentDate]);
+			// 	// 	} catch (err) {
+			// 	// 		console.log(err);
+			// 	// 	}
+			// 	// }, the_interval);
+			// }
 			
 			
 		}
