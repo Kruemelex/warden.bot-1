@@ -182,7 +182,7 @@ function mainOperation(){
 					let messagesLeft = unapproved_array.length - processedLeaderboard
 					let secondsRemaining = (messagesLeft * intervalTime) / 1000
 					let minutesRemaining = (secondsRemaining / 60).toFixed(2)
-					console.log(`Processed leaderboard message: ${leaderboard}`.green, dbInfo)
+					console.log(`Processed leaderboard message: ${leaderboard}`.green, dbInfo, minutesRemaining)
 					try {
 						const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
 						const receivedEmbed = originalMessage.embeds[0]
