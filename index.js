@@ -222,7 +222,7 @@ function mainOperation(){
 						}
 						if (processedLeaderboard == unapproved_array.length) { 
 							setTimeout(() => {
-								console.log(`Processed Messages Completed`.cyan)
+								console.log(`Processed ${leaderboard} Messages Completed`.cyan)
 								processedLeaderboard == 0
 								// interaction.editReply(
 								// 	{
