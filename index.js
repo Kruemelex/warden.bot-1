@@ -156,10 +156,10 @@ function mainOperation(){
 						const unapproved_list_response = await database.query(unapproved_list_sql, unapproved_list_values)
 						if (unapproved_list_response.length > 0) {
 							unapproved_array = unapproved_list_response
+							const intervalTime = evaluateMessageUpdate == 1 ? 3500 : 10
 							let messagesLeft = unapproved_array.length - processedLeaderboard
 							let secondsRemaining = (messagesLeft * intervalTime) / 1000
 							let minutesRemaining = (secondsRemaining / 60).toFixed(2)
-							const intervalTime = evaluateMessageUpdate == 1 ? 3500 : 10
 							for (const dbInfo of unapproved_array) {
 								processedLeaderboard++
 								await processLeaderboard(dbInfo, minutesRemaining, leaderboard, unapproved_array, processedLeaderboard)
