@@ -17,7 +17,7 @@ const { botLog } = require('../../../functions')
 	"source" : str - data source
  }
 */
-const interceptors = require("./data/interceptors.json");
+const interceptors = require("./data/interceptors.json")
 /*
 interceptor entry format
 "Interceptor name" : {
@@ -29,7 +29,7 @@ interceptor entry format
 */
 
 // Regex for extracting weapon number and code
-const regex = "([0-9]+)([a-z]+)";
+const regex = "([0-9]+)([a-z]+)"
 
 function codealiases(code){
 	switch(code){
@@ -195,13 +195,30 @@ module.exports = {
                     content: `Choose an Interceptor`,
                     components: [InterceptorVariantType],
                     ephemeral: true
-                });
+                })
                 const collectorFilter = i => i.user.id === interaction.user.id;
-                const confirmation = await interceptorResponse.awaitMessageComponent({ filter: collectorFilter, time: 60000 });
+                const confirmation = await interceptorResponse.awaitMessageComponent({ filter: collectorFilter, time: 3_600_000 }).catch(
+					botFunc.botLog(guild,new Discord.EmbedBuilder()
+						.setTitle(`⛔ interceptorFunc collector timeout`)
+						.setDescription('Greater than 3_600_000')
+						.addFields(
+							{ name: `Variable:`, value: `${confirmation}`, inline: false },
+						)
+						,2
+						,'error'
+					)
+				)
                 
-                await interaction.editReply({ components: [], content: "Variant:" + confirmation.customId, ephemeral: true }).catch(console.error);
+                await interaction.editReply({ components: [], content: "Variant:" + confirmation.customId, ephemeral: true }).catch(
+					botFunc.botLog(guild,new Discord.EmbedBuilder()
+						.setTitle(`⛔ interceptorFunc variant editReply error`)
+						.setDescription(error)
+						,2
+						,'error'
+					)
+				)
                 choosenCeptor = confirmation.customId
-				const weapon_codes = interaction?.options.getString('weapon_codes') ?? null;
+				const weapon_codes = interaction?.options.getString('weapon_codes') ?? null
 				if (!weapon_codes) { weapNumber(interaction) }
 				else { continueLoad()  }
 				
@@ -246,7 +263,17 @@ module.exports = {
                   components: [row1, row2],
                   ephemeral: true
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 });
+                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
+					botFunc.botLog(guild,new Discord.EmbedBuilder()
+						.setTitle(`⛔ weapNmber collector timeout`)
+						.setDescription('Greater than 3_600_000')
+						.addFields(
+							{ name: `Variable:`, value: `${collector}`, inline: false },
+						)
+						,2
+						,'error'
+					)
+				)
 
                 collector.on('collect', async i => {
                     const selection = i.customId;
@@ -269,7 +296,17 @@ module.exports = {
                   components: [weaponSizeRow],
                   ephemeral: true
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 });
+                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
+					botFunc.botLog(guild,new Discord.EmbedBuilder()
+						.setTitle(`⛔ weaponSizes collector timeout`)
+						.setDescription('Greater than 3_600_000')
+						.addFields(
+							{ name: `Variable:`, value: `${collector}`, inline: false },
+						)
+						,2
+						,'error'
+					)
+				)
                 collector.on('collect', async i => {
                     const selection = i.customId;
                     weaponsArray[thisIndex]["size"] = selection.slice(0,1).toLowerCase()
@@ -299,7 +336,17 @@ module.exports = {
                   components: [weaponHardpointRow],
                   ephemeral: true
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 });
+                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
+					botFunc.botLog(guild,new Discord.EmbedBuilder()
+						.setTitle(`⛔ weaponSizes collector timeout`)
+						.setDescription('Greater than 3_600_000')
+						.addFields(
+							{ name: `Variable:`, value: `${collector}`, inline: false },
+						)
+						,2
+						,'error'
+					)
+				)
                 collector.on('collect', async i => {
                     const selection = i.customId;
                     weaponsArray[thisIndex]["hardpoint"] = selection.slice(0,1).toLowerCase()
@@ -351,7 +398,17 @@ module.exports = {
                   const collector = interaction.channel.createMessageComponentCollector({
                     componentType: Discord.ComponentType.StringSelect,
                     time: 3_600_000,
-                  });
+                  }).catch(
+					botFunc.botLog(guild,new Discord.EmbedBuilder()
+						.setTitle(`⛔ weaponClass collector timeout`)
+						.setDescription('Greater than 3_600_000')
+						.addFields(
+							{ name: `Variable:`, value: `${collector}`, inline: false },
+						)
+						,2
+						,'error'
+					)
+				)
                 
                   collector.on('collect', async (i) => {
 					try {
@@ -389,7 +446,17 @@ module.exports = {
                   components: [addMoreWeaponsRow],
                   ephemeral: true
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 });
+                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
+					botFunc.botLog(guild,new Discord.EmbedBuilder()
+						.setTitle(`⛔ addMoreWeapons collector timeout`)
+						.setDescription('Greater than 3_600_000')
+						.addFields(
+							{ name: `Variable:`, value: `${collector}`, inline: false },
+						)
+						,2
+						,'error'
+					)
+				)
                 collector.on('collect', async i => {
                     const selection = i.customId;
                     await i.reply({ content: 'Add More Weapons: ' + selection, components: [], ephemeral: true }).catch(console.error);
@@ -423,16 +490,16 @@ module.exports = {
 				function weaponCodes(codez) {
 					// Treat weapon_codes
 					// Find all substrings on format NN+CC+
-					const matches = [...codez.matchAll(regex)];
+					const matches = [...codez.matchAll(regex)]
 					for(let m of matches){
 						outputString = outputString + `\nWeapon code found: ${m[0]} -> ${m[1]} - ${m[2]}`
-						let wcode = codealiases(m[2]);
+						let wcode = codealiases(m[2])
 						if (wcode in hardpoints){
-							hardpoints[wcode] = hardpoints[wcode] + parseInt(m[1]);
-							warningString = warningString + `\nNOTE: Code _\`${wcode}\`_ used multiple times. Adding numbers.`;
+							hardpoints[wcode] = hardpoints[wcode] + parseInt(m[1])
+							warningString = warningString + `\nNOTE: Code _\`${wcode}\`_ used multiple times. Adding numbers.`
 						}
 						else {
-							hardpoints[wcode] = parseInt(m[1]);
+							hardpoints[wcode] = parseInt(m[1])
 						}
 					}
 
@@ -613,7 +680,7 @@ module.exports = {
 			}
 		}
 		catch (err) {
-			interaction.followUp({content: "ERROR: " + err.message});
+			interaction.followUp({content: "ERROR: " + err.message})
 		}
 	}
 }

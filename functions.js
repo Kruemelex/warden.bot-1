@@ -457,11 +457,12 @@ const thisBotFunctions = {
 		embed.setColor(logColor)
 		.setTimestamp()
 		.setFooter({ text: `${thisBotFunctions.botIdent().activeBot.botName}  Logs`, iconURL: thisBotFunctions.botIdent().activeBot.icon });
-		try {
+		if (logFeature) {
             await bot.channels.cache.get(logFeature).send({ embeds: [embed], })
-		} catch {
-			console.error(`ERROR: ${logTranslate} Environment Variable Found, Logging will not work. OR your bot permissions are not high enough.`)
-		}
+        }
+        else {
+            console.error(`ERROR: ${logTranslate} Environment Variable NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
+        }
 	},
     getSortedRoleIDs: (message) => {
         /**

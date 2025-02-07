@@ -245,7 +245,7 @@ function mainOperation(){
 				// 		const channel = await bot.channels.cache.get(res.rows[row].channelid);
 				// 		channel.send(`<@${res.rows[row].discid}>: ${res.rows[row].memo}`);
 				// 	}
-			
+			 
 				// 	try {
 				// 		res = await warden_vars.query("DELETE FROM reminders WHERE duetime < $1", [currentDate]);
 				// 	} catch (err) {
@@ -307,7 +307,6 @@ function mainOperation(){
 	if (checkENV(process.env.TOKEN)) { 
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Initiating Login Process:".magenta,`🕗`)
 		bot.login(process.env.TOKEN)
-		// bot.login()
 	}
 	// General error handling
 	process.on('uncaughtException', function (err) {

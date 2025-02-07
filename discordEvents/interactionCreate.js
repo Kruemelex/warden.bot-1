@@ -8,7 +8,7 @@ const config = require('../config.json')
 const Discord = require('discord.js')
 const fs = require('fs')
 const path = require('path')
-const { default: test } = require('node:test')
+// const { default: test } = require('node:test')
 let args = {}
 function postArgs(interaction) {
     for (let key of interaction.options.data) {
@@ -198,12 +198,12 @@ const exp = {
         if (interaction.isCommand()) {
             const command = bot.commands.get(interaction.commandName);
             if (!command) return;
-            if (interaction.commandName === 'active_duty') {
+            if (botIdent().activeBot.botName == 'GuardianAI' && interaction.commandName === 'active_duty') {
                 postArgs(interaction)
                 activeDutyModal(interaction)
             }
             // console.log(interaction)
-            if (interaction.commandName === 'opord' && interaction.options.getSubcommand() === 'interested') {
+            if (botIdent().activeBot.botName == 'GuardianAI' && interaction.commandName === 'opord' && interaction.options.getSubcommand() === 'interested') {
                 postArgs(interaction)
                 opordInterestedModal(interaction)
             }

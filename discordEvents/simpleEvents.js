@@ -893,22 +893,38 @@ const exp = {
         }
     },
     messageDelete: async (message) => {
-        if (
-            !message?.author?.bot 
-            && !knowledge_proficiency_vars.knowledge_proficiency.includes(message.channel.parentId)
-        ) {  
-            try {
-                botLog(message.guild,new Discord.EmbedBuilder().setDescription(`Message deleted by user: ${message.author}` + '```' + `${message.content}` + '```').setTitle(`Message Deleted 🗑️`),1)
-            } 
-            catch (err) {
-                console.log(err)
-                botLog(message.guild,new Discord.EmbedBuilder()
-                    .setDescription('```' + err.stack + '```')
-                    .setTitle(`⛔ Fatal error experienced`)
-                    ,2
-                    ,'error'
-                )
+        try {
+            if (message.partial) {
+                try {
+                    await message.fetch()
+                } catch (e) {
+                    console.log('Failed to fetch deleted message:', e)
+                    botLog(message.guild,new Discord.EmbedBuilder()
+                        .setDescription('```' + e.stack + '```')
+                        .setTitle(`⛔ Failed to fetch deleted message`)
+                        ,2
+                        ,'error'
+                    )
+                }
             }
+            if ( 
+                !message?.author?.bot 
+                && !knowledge_proficiency_vars.knowledge_proficiency.includes(message.channel.parentId)
+            ) {  
+                botLog(message.guild,
+                new Discord.EmbedBuilder()
+                    .setDescription(`Message deleted by user: ${message.author}` + '```' + `${message.content}` + '```')
+                    .setTitle(`Message Deleted 🗑️`),1)
+            }
+        }
+        catch (e) {
+            console.log(e)
+            botLog(message.guild,new Discord.EmbedBuilder()
+                .setDescription('```' + e.stack + '```')
+                .setTitle(`⛔ Fatal error experienced`)
+                ,2
+                ,'error'
+            )
         }
 
 
