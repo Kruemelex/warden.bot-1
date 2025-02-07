@@ -146,9 +146,9 @@ function mainOperation(){
 			if(process.env.MODE == "PROD") {
 				const evaluateMessageUpdate = 1
 				const leaderboards = ['speedrun','ace']
-				leaderboards.forEach(i => { processMembersWithDelay(i) })
+				leaderboards.forEach(i => { processLeaderboardWithDelay(i) })
 				let processedLeaderboard = 0
-				async function processMembersWithDelay(leaderboard) {
+				async function processLeaderboardWithDelay(leaderboard) {
 					try {
 						let unapproved_array = []
 						const unapproved_list_values = false
@@ -169,7 +169,7 @@ function mainOperation(){
 						console.log(err)
 						botFunc.botLog(guild,new Discord.EmbedBuilder()
 							.setDescription('```' + err.stack + '```')
-							.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderboard})`)
+							.setTitle(`⛔ Fatal error experienced. processLeaderboardWithDelay(${leaderboard})`)
 							,2
 							,'error'
 						)
