@@ -215,7 +215,7 @@ function mainOperation(){
 							console.log(err)
 							botFunc.botLog(guild,new Discord.EmbedBuilder()
 								.setDescription('```' + err.stack + '```')
-								.setTitle(`⛔ Fatal error experienced. checkLeaderboards(${leaderboard})`)
+								.setTitle(`⛔ Fatal error experienced. processLeaderboard(${leaderboard})`)
 								,2
 								,'error'
 							)
