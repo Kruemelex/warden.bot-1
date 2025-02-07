@@ -147,8 +147,8 @@ function mainOperation(){
 				const evaluateMessageUpdate = 1
 				const leaderboards = ['speedrun','ace']
 				leaderboards.forEach(i => { processMembersWithDelay(i) })
+				let processedLeaderboard = 0
 				async function processMembersWithDelay(leaderboard) {
-					const intervalTime = evaluateMessageUpdate == 1 ? 3500 : 10
 					let unapproved_array = []
 					try {
 						const unapproved_list_values = false
@@ -156,10 +156,15 @@ function mainOperation(){
 						const unapproved_list_response = await database.query(unapproved_list_sql, unapproved_list_values)
 						if (unapproved_list_response.length > 0) {
 							unapproved_array = unapproved_list_response
-						}
-						for (const dbInfo of unapproved_array) {
-							await processLeaderboard(dbInfo, leaderboard)
-							await new Promise(resolve => setTimeout(resolve, intervalTime))
+							let messagesLeft = unapproved_array.length - processedLeaderboard
+							let secondsRemaining = (messagesLeft * intervalTime) / 1000
+							let minutesRemaining = (secondsRemaining / 60).toFixed(2)
+							const intervalTime = evaluateMessageUpdate == 1 ? 3500 : 10
+							for (const dbInfo of unapproved_array) {
+								processedLeaderboard++
+								await processLeaderboard(dbInfo, minutesRemaining, leaderboard, unapproved_array, processedLeaderboard)
+								await new Promise(resolve => setTimeout(resolve, intervalTime))
+							}
 						}
 					}
 					catch (err) {
@@ -173,11 +178,11 @@ function mainOperation(){
 						return
 					}
 				}
-				async function processLeaderboard(dbInfo, leaderboard) {
+				async function processLeaderboard(dbInfo, minutesRemaining, leaderboard, unapproved_array, processedLeaderboard) {
 					const staffChannel = process.env.STAFFCHANNELID
 					const staffChannel_obj = await guild.channels.fetch(staffChannel)
 				
-					console.log(dbInfo)
+					console.log(`Processed leaderboard message: ${leaderboard}`.green,dbInfo, minutesRemaining)
 					try {
 						const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
 						const receivedEmbed = originalMessage.embeds[0]
@@ -201,7 +206,7 @@ function mainOperation(){
 						const editedEmbed = Discord.EmbedBuilder.from(newEmbed)
 						let buttonResult = null;
 						buttonResult = await originalMessage.edit({ embeds: [editedEmbed], components: [row] })
-							
+						
 						try {
 							const submissionUpdate_values = [dbInfo.embed_id,dbInfo.id]
 							const submissionUpdate_sql = `UPDATE ${leaderboard} SET embed_id = (?) WHERE id = (?);`
@@ -214,6 +219,18 @@ function mainOperation(){
 								,2
 								,'error'
 							)
+						}
+						if (processedLeaderboard == unapproved_array.length) { 
+							setTimeout(() => {
+								console.log(`Processed Messages Completed`.green)
+								// interaction.editReply(
+								// 	{
+								// 		content: `Tag Correction Completed. Reviewed **${guildMemberCount}** Users.`, 
+								// 		embeds: [], 
+								// 		flags: Discord.MessageFlags.Ephemeral, 
+								// 	}
+								// ).catch(console.error)
+							},3500)
 						}
 					}
 					catch (err) {
