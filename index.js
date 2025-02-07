@@ -149,20 +149,18 @@ function mainOperation(){
 				leaderboards.forEach(i => { processMembersWithDelay(i) })
 				let processedLeaderboard = 0
 				async function processMembersWithDelay(leaderboard) {
-					let unapproved_array = []
 					try {
+						let unapproved_array = []
 						const unapproved_list_values = false
 						const unapproved_list_sql = `SELECT id,embed_id FROM ${leaderboard} WHERE approval = (?)`
 						const unapproved_list_response = await database.query(unapproved_list_sql, unapproved_list_values)
 						if (unapproved_list_response.length > 0) {
 							unapproved_array = unapproved_list_response
 							const intervalTime = evaluateMessageUpdate == 1 ? 3500 : 10
-							let messagesLeft = unapproved_array.length - processedLeaderboard
-							let secondsRemaining = (messagesLeft * intervalTime) / 1000
-							let minutesRemaining = (secondsRemaining / 60).toFixed(2)
+							
 							for (const dbInfo of unapproved_array) {
 								processedLeaderboard++
-								await processLeaderboard(dbInfo, minutesRemaining, leaderboard, unapproved_array, processedLeaderboard)
+								await processLeaderboard(dbInfo, intervalTime, leaderboard, unapproved_array, processedLeaderboard)
 								await new Promise(resolve => setTimeout(resolve, intervalTime))
 							}
 						}
@@ -178,10 +176,12 @@ function mainOperation(){
 						return
 					}
 				}
-				async function processLeaderboard(dbInfo, minutesRemaining, leaderboard, unapproved_array, processedLeaderboard) {
+				async function processLeaderboard(dbInfo, intervalTime, leaderboard, unapproved_array, processedLeaderboard) {
 					const staffChannel = process.env.STAFFCHANNELID
 					const staffChannel_obj = await guild.channels.fetch(staffChannel)
-				
+					let messagesLeft = unapproved_array.length - processedLeaderboard
+					let secondsRemaining = (messagesLeft * intervalTime) / 1000
+					let minutesRemaining = (secondsRemaining / 60).toFixed(2)
 					console.log(`Processed leaderboard message: ${leaderboard}`.green, dbInfo)
 					try {
 						const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
@@ -223,6 +223,7 @@ function mainOperation(){
 						if (processedLeaderboard == unapproved_array.length) { 
 							setTimeout(() => {
 								console.log(`Processed Messages Completed`.cyan)
+								processedLeaderboard == 0
 								// interaction.editReply(
 								// 	{
 								// 		content: `Tag Correction Completed. Reviewed **${guildMemberCount}** Users.`, 
