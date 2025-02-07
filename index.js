@@ -182,7 +182,7 @@ function mainOperation(){
 					const staffChannel = process.env.STAFFCHANNELID
 					const staffChannel_obj = await guild.channels.fetch(staffChannel)
 				
-					console.log(`Processed leaderboard message: ${leaderboard}`.green,dbInfo, minutesRemaining)
+					console.log(`Processed leaderboard message: ${leaderboard}`.green, dbInfo)
 					try {
 						const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
 						const receivedEmbed = originalMessage.embeds[0]
@@ -222,7 +222,7 @@ function mainOperation(){
 						}
 						if (processedLeaderboard == unapproved_array.length) { 
 							setTimeout(() => {
-								console.log(`Processed Messages Completed`.green)
+								console.log(`Processed Messages Completed`.cyan)
 								// interaction.editReply(
 								// 	{
 								// 		content: `Tag Correction Completed. Reviewed **${guildMemberCount}** Users.`, 
