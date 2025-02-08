@@ -201,9 +201,7 @@ module.exports = {
 					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ interceptorFunc collector timeout`)
 						.setDescription('Greater than 3_600_000')
-						.addFields(
-							{ name: `Variable:`, value: `${confirmation}`, inline: false },
-						)
+						
 						,2
 						,'error'
 					)
@@ -267,9 +265,7 @@ module.exports = {
 					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weapNmber collector timeout`)
 						.setDescription('Greater than 3_600_000')
-						.addFields(
-							{ name: `Variable:`, value: `${collector}`, inline: false },
-						)
+						
 						,2
 						,'error'
 					)
@@ -300,9 +296,7 @@ module.exports = {
 					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponSizes collector timeout`)
 						.setDescription('Greater than 3_600_000')
-						.addFields(
-							{ name: `Variable:`, value: `${collector}`, inline: false },
-						)
+						
 						,2
 						,'error'
 					)
@@ -340,9 +334,7 @@ module.exports = {
 					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponSizes collector timeout`)
 						.setDescription('Greater than 3_600_000')
-						.addFields(
-							{ name: `Variable:`, value: `${collector}`, inline: false },
-						)
+						
 						,2
 						,'error'
 					)
@@ -402,9 +394,7 @@ module.exports = {
 					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponClass collector timeout`)
 						.setDescription('Greater than 3_600_000')
-						.addFields(
-							{ name: `Variable:`, value: `${collector}`, inline: false },
-						)
+						
 						,2
 						,'error'
 					)
@@ -450,9 +440,7 @@ module.exports = {
 					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ addMoreWeapons collector timeout`)
 						.setDescription('Greater than 3_600_000')
-						.addFields(
-							{ name: `Variable:`, value: `${collector}`, inline: false },
-						)
+						
 						,2
 						,'error'
 					)
