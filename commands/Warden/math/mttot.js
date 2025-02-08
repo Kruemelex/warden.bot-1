@@ -201,7 +201,7 @@ module.exports = {
 					error =>
 					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponClass collector timeout`)
-						.setDescription(`Greater than 3_600_000\n${error}`)
+						.setDescription(`Greater than 3_600_000\n${error}\n<@${interaction.user.id}>`)
 						,2
 						,'error'
 					)
@@ -263,7 +263,7 @@ module.exports = {
 				} catch (error) {
 					botLog(guild, new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponNumber collector timeout`)
-						.setDescription(`Failed to create collector.\n${error}`)
+						.setDescription(`Failed to create collector.\n${error}\n<@${interaction.user.id}>`)
 					,2
 					,'error');
 				}
@@ -298,7 +298,7 @@ module.exports = {
 				} catch (error) {
 					botLog(guild, new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponSizes collector timeout`)
-						.setDescription(`Failed to create collector.\n${error}`)
+						.setDescription(`Failed to create collector.\n${error}\n<@${interaction.user.id}>`)
 					,2
 					,'error');
 				}
@@ -340,7 +340,7 @@ module.exports = {
 				} catch (error) {
 					botLog(guild, new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponHardpoint collector timeout`)
-						.setDescription(`Failed to create collector.\n${error}`)
+						.setDescription(`Failed to create collector.\n${error}\n<@${interaction.user.id}>`)
 					,2
 					,'error');
 				}
@@ -401,7 +401,7 @@ module.exports = {
 					} catch (error) {
 						botLog(guild, new Discord.EmbedBuilder()
 							.setTitle(`⛔ weaponClass collector timeout`)
-							.setDescription(`Failed to create collector.\n${error}`)
+							.setDescription(`Failed to create collector.\n${error}\n<@${interaction.user.id}>`)
 						,2
 						,'error');
 					}
@@ -418,7 +418,7 @@ module.exports = {
 						console.log(err)
 						botLog(interaction.guild,new Discord.EmbedBuilder()
 							.setDescription('```' + err.stack + '```')
-							.setTitle(`⛔ Fatal error experienced: Error line 357 diagnose`)
+							.setTitle(`⛔ Fatal error experienced: in WeaponClass() at line 421 diagnose\n<@${interaction.user.id}>`)
 							,2
 							,'error'
 						)
@@ -451,7 +451,7 @@ module.exports = {
 				} catch (error) {
 					botLog(guild, new Discord.EmbedBuilder()
 						.setTitle(`⛔ addMoreWeapons collector timeout`)
-						.setDescription(`Failed to create collector.\n${error}`)
+						.setDescription(`Failed to create collector.\n${error}\n<@${interaction.user.id}>`)
 					,2
 					,'error');
 				}
