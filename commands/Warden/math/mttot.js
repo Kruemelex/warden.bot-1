@@ -194,27 +194,20 @@ module.exports = {
                 const interceptorResponse = await interaction.reply({
                     content: `Choose an Interceptor`,
                     components: [InterceptorVariantType],
-                    ephemeral: true
+                    flags: Discord.MessageFlags.Ephemeral
                 })
                 const collectorFilter = i => i.user.id === interaction.user.id;
                 const confirmation = await interceptorResponse.awaitMessageComponent({ filter: collectorFilter, time: 3_600_000 }).catch(
+					error =>
 					botLog(guild,new Discord.EmbedBuilder()
-						.setTitle(`⛔ interceptorFunc collector timeout`)
-						.setDescription('Greater than 3_600_000')
-						
+						.setTitle(`⛔ weaponClass collector timeout`)
+						.setDescription(`Greater than 3_600_000\n${error}`)
 						,2
 						,'error'
 					)
 				)
                 
-                await interaction.editReply({ components: [], content: "Variant:" + confirmation.customId, ephemeral: true }).catch(
-					botLog(guild,new Discord.EmbedBuilder()
-						.setTitle(`⛔ interceptorFunc variant editReply error`)
-						.setDescription(error)
-						,2
-						,'error'
-					)
-				)
+                await interaction.editReply({ components: [], content: "Variant:" + confirmation.customId, flags: Discord.MessageFlags.Ephemeral })
                 choosenCeptor = confirmation.customId
 				const weapon_codes = interaction?.options.getString('weapon_codes') ?? null
 				if (!weapon_codes) { weapNumber(interaction) }
@@ -259,22 +252,26 @@ module.exports = {
                 const response = await interaction.followUp({
                   content: 'Choose the amount of weapons:',
                   components: [row1, row2],
-                  ephemeral: true
+                  flags: Discord.MessageFlags.Ephemeral
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botLog(guild,new Discord.EmbedBuilder()
-						.setTitle(`⛔ weapNmber collector timeout`)
-						.setDescription('Greater than 3_600_000')
-						
-						,2
-						,'error'
-					)
-				)
+                let collector;
+				try {
+					collector = response.createMessageComponentCollector({ 
+						componentType: Discord.ComponentType.Button, 
+						time: 3_600_000 
+					});
+				} catch (error) {
+					botLog(guild, new Discord.EmbedBuilder()
+						.setTitle(`⛔ weaponNumber collector error`)
+						.setDescription(`Failed to create collector.\n${error}`)
+					,2
+					,'error');
+				}
 
                 collector.on('collect', async i => {
                     const selection = i.customId;
                     weaponsArray[thisIndex]["weapNumber"] = selection
-                    await i.reply({ content: 'Weapon Amount: ' + selection, components: [], ephemeral: true }).catch(console.error);
+                    await i.reply({ content: 'Weapon Amount: ' + selection, components: [], flags: Discord.MessageFlags.Ephemeral }).catch(console.error);
                     weaponSizes(interaction)
                 });
             }
@@ -290,21 +287,25 @@ module.exports = {
                 const response = await interaction.followUp({
                   content: 'Choose the Size:',
                   components: [weaponSizeRow],
-                  ephemeral: true
+                  flags: Discord.MessageFlags.Ephemeral
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botLog(guild,new Discord.EmbedBuilder()
+				let collector;
+				try {
+					collector = response.createMessageComponentCollector({ 
+						componentType: Discord.ComponentType.Button, 
+						time: 3_600_000 
+					});
+				} catch (error) {
+					botLog(guild, new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponSizes collector timeout`)
-						.setDescription('Greater than 3_600_000')
-						
-						,2
-						,'error'
-					)
-				)
+						.setDescription(`Failed to create collector.\n${error}`)
+					,2
+					,'error');
+				}
                 collector.on('collect', async i => {
                     const selection = i.customId;
                     weaponsArray[thisIndex]["size"] = selection.slice(0,1).toLowerCase()
-                    await i.reply({ content: 'Weapon Size: ' + selection, components: [], ephemeral: true }).catch(console.error);
+                    await i.reply({ content: 'Weapon Size: ' + selection, components: [], flags: Discord.MessageFlags.Ephemeral }).catch(console.error);
                     collector.stop()
                     weaponHardpoint(interaction)
                 });
@@ -328,21 +329,25 @@ module.exports = {
                 const response = await interaction.followUp({
                   content: 'Choose the Hardpoint:',
                   components: [weaponHardpointRow],
-                  ephemeral: true
+                  flags: Discord.MessageFlags.Ephemeral
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botLog(guild,new Discord.EmbedBuilder()
-						.setTitle(`⛔ weaponSizes collector timeout`)
-						.setDescription('Greater than 3_600_000')
-						
-						,2
-						,'error'
-					)
-				)
+                let collector;
+				try {
+					collector = response.createMessageComponentCollector({ 
+						componentType: Discord.ComponentType.Button, 
+						time: 3_600_000 
+					});
+				} catch (error) {
+					botLog(guild, new Discord.EmbedBuilder()
+						.setTitle(`⛔ weaponHardpoint collector timeout`)
+						.setDescription(`Failed to create collector.\n${error}`)
+					,2
+					,'error');
+				}
                 collector.on('collect', async i => {
                     const selection = i.customId;
                     weaponsArray[thisIndex]["hardpoint"] = selection.slice(0,1).toLowerCase()
-                    await i.reply({ content: 'Weapon Hardpoint: ' + selection, components: [], ephemeral: true }).catch(console.error);
+                    await i.reply({ content: 'Weapon Hardpoint: ' + selection, components: [], flags: Discord.MessageFlags.Ephemeral }).catch(console.error);
                     collector.stop()
                     weaponClass(interaction)
                 });
@@ -383,27 +388,28 @@ module.exports = {
                   await interaction.followUp({
                     content: contentMessage,
                     components: [weaponClassSelectMenuActionRow],
-                    ephemeral: true
+                    flags: Discord.MessageFlags.Ephemeral
                   });
                 
                   // Handle collector for each select menu
-                  const collector = interaction.channel.createMessageComponentCollector({
-                    componentType: Discord.ComponentType.StringSelect,
-                    time: 3_600_000,
-                  }).catch(
-					botLog(guild,new Discord.EmbedBuilder()
-						.setTitle(`⛔ weaponClass collector timeout`)
-						.setDescription('Greater than 3_600_000')
-						
+                  let collector;
+					try {
+						collector = interaction.channel.createMessageComponentCollector({ 
+							componentType: Discord.ComponentType.StringSelect,
+							time: 3_600_000 
+						});
+					} catch (error) {
+						botLog(guild, new Discord.EmbedBuilder()
+							.setTitle(`⛔ weaponClass collector timeout`)
+							.setDescription(`Failed to create collector.\n${error}`)
 						,2
-						,'error'
-					)
-				)
+						,'error');
+					}
                 
                   collector.on('collect', async (i) => {
 					try {
 						const selection = i.values[0]
-						await i.update({ components: [], content: 'Weapon Classification: ' + selection, ephemeral: true });
+						await i.update({ components: [], content: 'Weapon Classification: ' + selection, flags: Discord.MessageFlags.Ephemeral });
 						weaponsArray[thisIndex]["type"] = selection
 						collector.stop();
 						addMoreWeapons(interaction)	
@@ -434,20 +440,24 @@ module.exports = {
                 const response = await interaction.followUp({
                   content: 'Add more weapons?:',
                   components: [addMoreWeaponsRow],
-                  ephemeral: true
+                  flags: Discord.MessageFlags.Ephemeral
                 });
-                const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botLog(guild,new Discord.EmbedBuilder()
+                let collector;
+				try {
+					collector = response.createMessageComponentCollector({ 
+						componentType: Discord.ComponentType.Button, 
+						time: 3_600_000 
+					});
+				} catch (error) {
+					botLog(guild, new Discord.EmbedBuilder()
 						.setTitle(`⛔ addMoreWeapons collector timeout`)
-						.setDescription('Greater than 3_600_000')
-						
-						,2
-						,'error'
-					)
-				)
+						.setDescription(`Failed to create collector.\n${error}`)
+					,2
+					,'error');
+				}
                 collector.on('collect', async i => {
                     const selection = i.customId;
-                    await i.reply({ content: 'Add More Weapons: ' + selection, components: [], ephemeral: true }).catch(console.error);
+                    await i.reply({ content: 'Add More Weapons: ' + selection, components: [], flags: Discord.MessageFlags.Ephemeral }).catch(console.error);
                     collector.stop()
 					if (selection == 'Yes') {
 						weapNumber(interaction)
