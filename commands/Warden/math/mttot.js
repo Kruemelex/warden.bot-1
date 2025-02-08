@@ -262,7 +262,7 @@ module.exports = {
 					});
 				} catch (error) {
 					botLog(guild, new Discord.EmbedBuilder()
-						.setTitle(`⛔ weaponNumber collector error`)
+						.setTitle(`⛔ weaponNumber collector timeout`)
 						.setDescription(`Failed to create collector.\n${error}`)
 					,2
 					,'error');
@@ -392,7 +392,7 @@ module.exports = {
                   });
                 
                   // Handle collector for each select menu
-                  let collector;
+                  let collector
 					try {
 						collector = interaction.channel.createMessageComponentCollector({ 
 							componentType: Discord.ComponentType.StringSelect,
