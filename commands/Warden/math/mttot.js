@@ -195,7 +195,7 @@ module.exports = {
                     content: `Choose an Interceptor`,
                     components: [InterceptorVariantType],
                     flags: Discord.MessageFlags.Ephemeral
-                })
+                }) 
                 const collectorFilter = i => i.user.id === interaction.user.id;
                 const confirmation = await interceptorResponse.awaitMessageComponent({ filter: collectorFilter, time: 3_600_000 }).catch(
 					error =>
