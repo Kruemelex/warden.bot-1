@@ -198,7 +198,7 @@ module.exports = {
                 })
                 const collectorFilter = i => i.user.id === interaction.user.id;
                 const confirmation = await interceptorResponse.awaitMessageComponent({ filter: collectorFilter, time: 3_600_000 }).catch(
-					botFunc.botLog(guild,new Discord.EmbedBuilder()
+					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ interceptorFunc collector timeout`)
 						.setDescription('Greater than 3_600_000')
 						.addFields(
@@ -210,7 +210,7 @@ module.exports = {
 				)
                 
                 await interaction.editReply({ components: [], content: "Variant:" + confirmation.customId, ephemeral: true }).catch(
-					botFunc.botLog(guild,new Discord.EmbedBuilder()
+					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ interceptorFunc variant editReply error`)
 						.setDescription(error)
 						,2
@@ -264,7 +264,7 @@ module.exports = {
                   ephemeral: true
                 });
                 const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botFunc.botLog(guild,new Discord.EmbedBuilder()
+					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weapNmber collector timeout`)
 						.setDescription('Greater than 3_600_000')
 						.addFields(
@@ -297,7 +297,7 @@ module.exports = {
                   ephemeral: true
                 });
                 const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botFunc.botLog(guild,new Discord.EmbedBuilder()
+					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponSizes collector timeout`)
 						.setDescription('Greater than 3_600_000')
 						.addFields(
@@ -337,7 +337,7 @@ module.exports = {
                   ephemeral: true
                 });
                 const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botFunc.botLog(guild,new Discord.EmbedBuilder()
+					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponSizes collector timeout`)
 						.setDescription('Greater than 3_600_000')
 						.addFields(
@@ -399,7 +399,7 @@ module.exports = {
                     componentType: Discord.ComponentType.StringSelect,
                     time: 3_600_000,
                   }).catch(
-					botFunc.botLog(guild,new Discord.EmbedBuilder()
+					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ weaponClass collector timeout`)
 						.setDescription('Greater than 3_600_000')
 						.addFields(
@@ -447,7 +447,7 @@ module.exports = {
                   ephemeral: true
                 });
                 const collector = response.createMessageComponentCollector({ componentType: Discord.ComponentType.Button, time: 3_600_000 }).catch(
-					botFunc.botLog(guild,new Discord.EmbedBuilder()
+					botLog(guild,new Discord.EmbedBuilder()
 						.setTitle(`⛔ addMoreWeapons collector timeout`)
 						.setDescription('Greater than 3_600_000')
 						.addFields(
