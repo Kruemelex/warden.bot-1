@@ -912,11 +912,19 @@ const exp = {
                 !message?.author?.bot 
                 && !knowledge_proficiency_vars.knowledge_proficiency.includes(message.channel.parentId)
             ) {
+                console.log(message)
                 const fetchLogs = await message.guild.fetchAuditLogs({
                     limit: 1,
                     type: 72, //message_delete
                 })
                 const deletionLog = fetchLogs.entries.first()
+                console.log(deletionLog)
+                console.log(message.id)
+                console.log("dlog lmid:",deletionLog.extra.channel.lastMessageId)
+                const deletedBy = 
+                    message.author != null && (message.id == deletionLog.extra.channel.lastMessageId)
+                    ? message.author 
+                    : deletionLog.executor
                 const messageContent = 
                     message.content != null
                     ? message.content
@@ -927,7 +935,7 @@ const exp = {
                     : "Cache Empty"
                 botLog(message.guild,
                 new Discord.EmbedBuilder()
-                    .setDescription(`Deleted By: ${deletionLog.executor}\n` + '- Author: ' + `${messageAuthor}\n` +  `- Messsage\`\`\`${messageContent}\`\`\``)
+                    .setDescription(`Deleted By: ${deletedBy}\n` + '- Author: ' + `${messageAuthor}\n` +  `- Messsage\`\`\`${messageContent}\`\`\``)
                     .setTitle(`Message Deleted 🗑️`),1)
             }
         }
