@@ -310,6 +310,7 @@ function mainOperation(){
 				{ name: `Limit:`, value: `${info.limit}`, inline: false },
 				{ name: `majorParameter:`, value: `${info.majorParameter}`, inline: false },
 				{ name: `method:`, value: `${info.method}`, inline: false },
+				{ name: `name:`, value: `${info.name}`, inline: false },
 				{ name: `retryAfter:`, value: `${info.retryAfter}`, inline: false },
 				{ name: `route:`, value: `${info.route}`, inline: false },
 				{ name: `scope:`, value: `${info.scope}`, inline: false },
