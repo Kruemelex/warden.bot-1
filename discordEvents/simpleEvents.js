@@ -900,21 +900,34 @@ const exp = {
                 } catch (e) {
                     // console.log(message)
                     // console.log('Deleted Message not in cache due to bot restart')
-                    botLog(message.guild,new Discord.EmbedBuilder()
-                        .setDescription('``` unknown message ```')
-                        .setTitle(`⛔ Deleted message not in cache after bot restart.`)
-                        ,2
-                        ,'error'
-                    )
+                    // botLog(message.guild,new Discord.EmbedBuilder()
+                    //     .setDescription('``` unknown message ```')
+                    //     .setTitle(`⛔ Deleted message not in cache after bot restart.`)
+                    //     ,2
+                    //     ,'error'
+                    // )
                 }
             }
             if (
                 !message?.author?.bot 
                 && !knowledge_proficiency_vars.knowledge_proficiency.includes(message.channel.parentId)
-            ) {  
+            ) {
+                const fetchLogs = await message.guild.fetchAuditLogs({
+                    limit: 1,
+                    type: 72, //message_delete
+                })
+                const deletionLog = fetchLogs.entries.first()
+                const messageContent = 
+                    message.content != null
+                    ? message.content
+                    : "Cache Empty"
+                const messageAuthor = 
+                    message.author != null
+                    ? message.author
+                    : "Cache Empty"
                 botLog(message.guild,
                 new Discord.EmbedBuilder()
-                    .setDescription(`Message deleted by user: ${message.author}` + '```' + `${message.content}` + '```')
+                    .setDescription(`Deleted By: ${deletionLog.executor}\n` + '- Author: ' + `${messageAuthor}\n` +  `- Messsage\`\`\`${messageContent}\`\`\``)
                     .setTitle(`Message Deleted 🗑️`),1)
             }
         }
