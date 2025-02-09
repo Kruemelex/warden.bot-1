@@ -898,10 +898,10 @@ const exp = {
                 try {
                     await message.fetch()
                 } catch (e) {
-                    console.log('Failed to fetch deleted message:', e)
+                    console.log('Deleted Message not in cache due to bot restart')
                     botLog(message.guild,new Discord.EmbedBuilder()
-                        .setDescription('```' + e.stack + '```')
-                        .setTitle(`⛔ Failed to fetch deleted message`)
+                        .setDescription('```' + message + '```')
+                        .setTitle(`⛔ Deleted message not in cache.`)
                         ,2
                         ,'error'
                     )

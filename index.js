@@ -245,7 +245,7 @@ function mainOperation(){
 						return
 					}
 				}
-				
+
 				// Scheduled Role Backup Task
 				// cron.schedule('*/5 * * * *', function () {
 				// 	//TODO REBUILD THIS, not absolutely necessary, as people that leave the server showup in the staff channel with all previous roles.

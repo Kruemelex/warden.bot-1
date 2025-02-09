@@ -420,11 +420,6 @@ const thisBotFunctions = {
             ,'error'
         )
     },
-    /**
-     * Log a discord bot event in the Log Channel
-     * @author  (Mgram) Marcus Ingram @MgramTheDuck
-     * @function botLog
-    */
     botLog: async (bot,embed,severity,logType) => {
         require("dotenv").config({ path: `./${thisBotFunctions.botIdent().activeBot.env}/` });
 		let logColor
@@ -459,7 +454,7 @@ const thisBotFunctions = {
 		.setFooter({ text: `${thisBotFunctions.botIdent().activeBot.botName}  Logs`, iconURL: thisBotFunctions.botIdent().activeBot.icon });
 		if (logFeature) {
             await bot.channels.cache.get(logFeature).send({ embeds: [embed], })
-            await bot.channels.cache.get(process.env.LOGCHANNEL).send({ content: "rate limiting validation, if buttons are present DO NOT touch in this channel.", embeds: [embed], })
+            // await bot.channels.cache.get(process.env.LOGCHANNEL).send({ content: "rate limiting validation, if buttons are present DO NOT touch in this channel.", embeds: [embed], })
         }
         else {
             console.error(`ERROR: ${logTranslate} Environment Variable NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
