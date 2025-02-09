@@ -934,7 +934,8 @@ const exp = {
         if (oldMessage.content !== newMessage.content && !newMessage.author.bot) {
             //Field values max char limit 1024
             //Description max char 4096
-            if (oldMessage.content.length >= 2000) { 
+            console.log(oldMessage.content.length)
+            if (oldMessage.content.length >= 2000) {
                 botLog(bot,new Discord.EmbedBuilder()
                     .setDescription(`Message updated by user: ${oldMessage.author}` + '```' + `${oldMessage}` + '```')
                     .setTitle(`Original Message 📝`),1)
