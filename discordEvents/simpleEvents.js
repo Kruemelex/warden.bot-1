@@ -931,25 +931,39 @@ const exp = {
 
     },
     messageUpdate: async (oldMessage, newMessage, bot) => {
-        if (oldMessage.content !== newMessage.content && !newMessage.author.bot) {
-            //Field values max char limit 1024
-            //Description max char 4096
-            console.log(oldMessage.content.length)
-            if (oldMessage.content.length >= 2000) {
-                botLog(bot,new Discord.EmbedBuilder()
-                    .setDescription(`Message updated by user: ${oldMessage.author}` + '```' + `${oldMessage}` + '```')
-                    .setTitle(`Original Message 📝`),3)
-                botLog(bot,new Discord.EmbedBuilder()
-                    .setDescription('```' + `${newMessage}` + '```' + `Message Link: ${oldMessage.url}`)
-                    .setTitle(`Updated Message📝`),3)
-            }
-            else {
-                botLog(bot,new Discord.EmbedBuilder()
-                    .setDescription(`Message updated by user: ${oldMessage.author}\n` + '- Old Message```' + `${oldMessage}` + '```\n' + '- New Message```' + `${newMessage}` + '```\n' + `- Message Link ${oldMessage.url}`)
-                    .setTitle(`Original Message 📝`),3)
+        if (!newMessage.author.bot) {
+            try {
+                let oldContent = oldMessage?.content
+                let newContent = newMessage.content || "No new content."
+                if (!oldContent || oldContent === newContent) {
+                    oldContent = "Bot: Restarted, cache not available."
+                }
+                if (oldContent.length >= 2000) {
+                    botLog(bot, new Discord.EmbedBuilder()
+                        .setDescription(`Message updated by user: ${newMessage.author}\n\`\`\`${oldContent}\`\`\``)
+                        .setTitle(`Original Message 📝`), 3)
+    
+                    botLog(bot, new Discord.EmbedBuilder()
+                        .setDescription(`\`\`\`${newContent}\`\`\`\nMessage Link: ${newMessage.url}`)
+                        .setTitle(`Updated Message 📝`), 3)
+                } else {
+                    botLog(bot, new Discord.EmbedBuilder()
+                        .setDescription(`Message updated by user: ${newMessage.author}\n` +
+                            `- Old Message\`\`\`${oldContent}\`\`\`\n` +
+                            `- New Message\`\`\`${newContent}\`\`\`\n` +
+                            `- Message Link: ${newMessage.url}`)
+                        .setTitle(`Message Updated 📝`), 3)
+                }
+            } catch (err) {
+                botLog(guild,new Discord.EmbedBuilder()
+                    .setTitle(`⛔ Error Handling messageUpdate() in simpleEvents.js`)
+                    .setDescription('```' + err.stack + '```')
+                    ,2
+                    ,'error'
+                )
             }
         }
-    },
+    },    
     guildMemberRemove: async (member, bot) => { 
         let roles = ``
         member.roles.cache.each(role => roles += `${role}\n`)

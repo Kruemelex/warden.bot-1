@@ -119,7 +119,7 @@ function mainOperation(){
 	bot.once("ready", async() => {
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Login Process Completed:".magenta,`✅`)
 		await botFunc.deployCommands(commandsColl,REST,Routes,bot)
-		botFunc.botLog(bot,new Discord.EmbedBuilder().setDescription(`💡 ${bot.user.username} online! logged in as ${bot.user.tag}`).setTitle(`${bot.user.username} Online`),0);
+		botFunc.botLog(bot,new Discord.EmbedBuilder().setDescription(`💡 ${bot.user.username} online! logged in as ${bot.user.tag}\n - Cache cleared`).setTitle(`${bot.user.username} Online`),0);
 		global.guild = bot.guilds.cache.first()
         
 		if (botFunc.botIdent().activeBot.botName == 'GuardianAI') {
