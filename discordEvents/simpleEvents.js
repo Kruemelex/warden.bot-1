@@ -898,10 +898,11 @@ const exp = {
                 try {
                     await message.fetch()
                 } catch (e) {
-                    console.log('Deleted Message not in cache due to bot restart')
+                    // console.log(message)
+                    // console.log('Deleted Message not in cache due to bot restart')
                     botLog(message.guild,new Discord.EmbedBuilder()
-                        .setDescription('```' + message + '```')
-                        .setTitle(`⛔ Deleted message not in cache.`)
+                        .setDescription('``` unknown message ```')
+                        .setTitle(`⛔ Deleted message not in cache after bot restart.`)
                         ,2
                         ,'error'
                     )
@@ -932,13 +933,21 @@ const exp = {
     messageUpdate: async (oldMessage, newMessage, bot) => {
         if (oldMessage.content !== newMessage.content && !newMessage.author.bot) {
             //Field values max char limit 1024
-            //Description max char 4096 
-            botLog(bot,new Discord.EmbedBuilder()
-                .setDescription(`Message updated by user: ${oldMessage.author}` + '```' + `${oldMessage}` + '```')
-                .setTitle(`Original Message 📝`),1)
-            botLog(bot,new Discord.EmbedBuilder()
-                .setDescription('```' + `${newMessage}` + '```' + `Message Link: ${oldMessage.url}`)
-                .setTitle(`Updated Message📝`),1)
+            //Description max char 4096
+            console.log(oldMessage.content.length)
+            if (oldMessage.content.length >= 2000) { 
+                botLog(bot,new Discord.EmbedBuilder()
+                    .setDescription(`Message updated by user: ${oldMessage.author}` + '```' + `${oldMessage}` + '```')
+                    .setTitle(`Original Message 📝`),1)
+                botLog(bot,new Discord.EmbedBuilder()
+                    .setDescription('```' + `${newMessage}` + '```' + `Message Link: ${oldMessage.url}`)
+                    .setTitle(`Updated Message📝`),1)
+            }
+            else {
+                botLog(bot,new Discord.EmbedBuilder()
+                    .setDescription(`Message updated by user: ${oldMessage.author}\n` + '- Old Message```' + `${oldMessage}` + '```\n' + '- New Message```' + `${newMessage}` + '```\n' + `- Message Link ${oldMessage.url}`)
+                    .setTitle(`Original Message 📝`),1)
+            }
         }
     },
     guildMemberRemove: async (member, bot) => { 
