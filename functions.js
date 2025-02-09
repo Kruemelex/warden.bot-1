@@ -433,6 +433,9 @@ const thisBotFunctions = {
 			case 2:
 				logColor = '#f55142' //Red
 				break;
+            case 3:
+                logColor = '#000000' //Nothing
+                break;
 		}
         let logFeature
         let logTranslate

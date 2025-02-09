@@ -938,15 +938,15 @@ const exp = {
             if (oldMessage.content.length >= 2000) {
                 botLog(bot,new Discord.EmbedBuilder()
                     .setDescription(`Message updated by user: ${oldMessage.author}` + '```' + `${oldMessage}` + '```')
-                    .setTitle(`Original Message 📝`),1)
+                    .setTitle(`Original Message 📝`),3)
                 botLog(bot,new Discord.EmbedBuilder()
                     .setDescription('```' + `${newMessage}` + '```' + `Message Link: ${oldMessage.url}`)
-                    .setTitle(`Updated Message📝`),1)
+                    .setTitle(`Updated Message📝`),3)
             }
             else {
                 botLog(bot,new Discord.EmbedBuilder()
                     .setDescription(`Message updated by user: ${oldMessage.author}\n` + '- Old Message```' + `${oldMessage}` + '```\n' + '- New Message```' + `${newMessage}` + '```\n' + `- Message Link ${oldMessage.url}`)
-                    .setTitle(`Original Message 📝`),1)
+                    .setTitle(`Original Message 📝`),3)
             }
         }
     },
