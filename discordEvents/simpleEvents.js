@@ -912,17 +912,18 @@ const exp = {
                 !message?.author?.bot 
                 && !knowledge_proficiency_vars.knowledge_proficiency.includes(message.channel.parentId)
             ) {
-                console.log(message)
+                
                 const fetchLogs = await message.guild.fetchAuditLogs({
                     limit: 1,
                     type: 72, //message_delete
                 })
                 const deletionLog = fetchLogs.entries.first()
-                console.log(deletionLog)
+                console.log("MESSAGE:".yellow,message)
+                console.log("AUDIT LOG".yellow,deletionLog)
                 console.log(message.id)
                 console.log("dlog lmid:",deletionLog.extra.channel.lastMessageId)
                 const deletedBy = 
-                    message.author != null && (message.id == deletionLog.extra.channel.lastMessageId)
+                    message.author != null && (message.id == deletionLog.extra.channel.lastMessageId) && (message.author.id != deletionLog.executor.id)
                     ? message.author 
                     : deletionLog.executor
                 const messageContent = 
