@@ -1,4 +1,4 @@
-if (process.env.SOCKET_TOKEN) { 
+if (process.env.SOCKET_TOKEN && process.env.MODE == "PROD") { 
     const { io, Manager } = require('socket.io-client')
     const { botIdent } = require('../functions')
     const Discord = require("discord.js");

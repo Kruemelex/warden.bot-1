@@ -1,4 +1,4 @@
-if (process.env.SOCKET_TOKEN) { 
+if (process.env.SOCKET_TOKEN && process.env.MODE == "PROD") { 
     const { botIdent } = require('../functions')
     const { Manager } = require('socket.io-client')
     const jwt = require('jsonwebtoken')
