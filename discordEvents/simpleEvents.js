@@ -893,126 +893,54 @@ const exp = {
         }
     },
     messageDelete: async (message) => {
-        // try {
-        //     if (message.partial) {
-        //         try {
-        //             await message.fetch()
-        //         } catch (e) {
-        //             // console.log(message)
-        //             // console.log('Deleted Message not in cache due to bot restart')
-        //             // botLog(message.guild,new Discord.EmbedBuilder()
-        //             //     .setDescription('``` unknown message ```')
-        //             //     .setTitle(`⛔ Deleted message not in cache after bot restart.`)
-        //             //     ,2
-        //             //     ,'error'
-        //             // )
-        //         }
-        //     }
-        //     if (
-        //         !message?.author?.bot 
-        //         && !knowledge_proficiency_vars.knowledge_proficiency.includes(message.channel.parentId)
-        //     ) {
-                
-        //         const fetchLogs = await message.guild.fetchAuditLogs({
-        //             limit: 1,
-        //             type: 72, //message_delete
-        //         })
-        //         const deletionLog_new = fetchLogs.entries.first()
-        //         console.log("MESSAGE:".yellow,message)
-        //         console.log("AUDIT LOG".yellow,deletionLog)
-        //         console.log("message.id".blue,message.id)
-        //         console.log("lastMessageId".blue,deletionLog.extra.channel.lastMessageId)
-        //         console.log("message.author.id".bgMagenta,message.author.id)
-        //         console.log("deletionLog_new.targetId".bgMagenta,deletionLog_new.targetId)
-        //         console.log("deletionLog_new.executorId".red,deletionLog.executorId)
-        //         console.log("deletionLog_new.id".green,deletionLog_new.id)
-        //         console.log("deletionLog.id".green,deletionLog.id)
-        //         const messageAuthor = 
-        //             message.author != null
-        //             ? message.author
-        //             : "Cache Empty"
-        //         let deletedBy = null
-                
-        //         console.log()
-        //         console.log()
-        //         console.log()
-        //         console.log()
-        //         console.log()
-        //         // authored and deleted by admin
-        //         if (
-        //             message.id == deletionLog_new.extra.channel.lastMessageId
-        //             && deletionLog_new.executorId == message.author.id
-        //         ) {
-        //             console.log("1".cyan)
-        //             deletedBy = deletionLog_new.executor
-        //         }
-        //         // not authored by admin, but deleted by admin
-        //         if (
-        //             message.id == deletionLog_new.extra.channel.lastMessageId
-        //             && deletionLog_new.id != deletionLog.id
-        //             && deletionLog_new.executorId != message.author.id
-        //             && deletionLog_new.targetId == message.author.id
-        //         ) {
-        //             console.log("2".cyan)
-        //             deletedBy = deletionLog_new.executor
-        //         }
-        //         // not authored by admin, but deleted by author
-        //         if (
-        //             message.id == deletionLog_new.extra.channel.lastMessageId
-        //             && deletionLog_new.executorId == message.author.id
-        //             && deletionLog_new.id != deletionLog.id
-        //         ) {
-        //             console.log("3".cyan)
-        //             deletedBy = messageAuthor
-        //         }
-
-
-
-        //         if (message.author.id == null) {
-        //             console.log("4".cyan)
-        //             deletedBy = "Cache Empty"
-        //         }
-        //         console.log("deletedBy".yellow,deletedBy)
-        //         const messageContent = 
-        //             message.content != null
-        //             ? message.content
-        //             : "Cache Empty"
-                
-        //         botLog(message.guild,
-        //         new Discord.EmbedBuilder()
-        //             .setDescription(`Deleted By: ${deletedBy}\n` + '- Author: ' + `${messageAuthor}\n` +  `- Messsage\`\`\`${messageContent}\`\`\``)
-        //             .setTitle(`Message Deleted 🗑️`),1)
-        //     }
-        // }
-        // catch (e) {
-        //     console.log(e)
-        //     botLog(message.guild,new Discord.EmbedBuilder()
-        //         .setDescription('```' + e.stack + '```')
-        //         .setTitle(`⛔ Fatal error experienced`)
-        //         ,2
-        //         ,'error'
-        //     )
-        // }
         try {
-            await new Promise(resolve => setTimeout(resolve, 1500)) 
+            let deletedBy = null
             const fetchedLogs = await message.guild.fetchAuditLogs({
                 type: 72, // 72 is MESSAGE_DELETE
                 limit: 1
             })
             const deletionLog = fetchedLogs.entries.first()
             if (!deletionLog) {
-                console.log(`${message.author.tag} deleted their own message.`)
+                // console.log(`${message.author.tag} deleted their own message.`)
+                deletedBy = message.author
+                sendEmbed(deletedBy)
                 return
             }
             const { executor, target, createdTimestamp } = deletionLog
             if (target.id !== message.author.id || Date.now() - createdTimestamp > 5000) {
-                console.log(`${message.author.tag} deleted their own message.`)
+                // console.log(`${message.author.tag} deleted their own message.`)
+                deletedBy = message.author
+                sendEmbed(deletedBy)
                 return
             }
             if (executor.id === message.author.id) {
-                console.log(`${executor.tag} (a mod) deleted their own message.`)
+                // console.log(`${executor.tag} (a mod) deleted their own message.`)
+                deletedBy = executor
+                sendEmbed(deletedBy)
             } else {
-                console.log(`${executor.tag} deleted a message from ${message.author.tag}.`)
+                // console.log(`${executor.tag} deleted a message from ${message.author.tag}.`)
+                deletedBy = executor
+                sendEmbed(deletedBy)
+            }
+            function sendEmbed(deletedBy) {
+                
+                if (message.author.id == null) {
+                    // console.log("4".cyan)
+                    deletedBy = "Cache Empty"
+                }
+                const messageAuthor = 
+                    message.author != null
+                    ? message.author
+                    : "Cache Empty"
+                const messageContent = 
+                    message.content != null
+                    ? message.content.replace(/`/g, "")
+                    : "Cache Empty"
+                
+                botLog(message.guild,
+                new Discord.EmbedBuilder()
+                    .setDescription(`Deleted By: ${deletedBy}\n` + '- Author: ' + `${messageAuthor}\n` +  `- Messsage\`\`\`${messageContent}\`\`\``)
+                    .setTitle(`Message Deleted 🗑️`),1)
             }
         } catch (error) {
             console.error("Error fetching audit logs:", error)
