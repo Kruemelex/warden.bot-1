@@ -954,7 +954,7 @@ const exp = {
                 let newContent = newMessage.content || "No new content."
                 newContent = newContent.replace(/`/g, "")
                 if (!oldContent || oldContent === newContent) {
-                    oldContent = "Bot: Restarted, cache not available."
+                    oldContent = "Bot: Cache Unvailable / Same Content / "
                 }
                 if (oldContent.length >= 2000) {
                     botLog(bot, new Discord.EmbedBuilder()
