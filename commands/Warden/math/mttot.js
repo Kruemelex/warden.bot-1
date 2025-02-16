@@ -409,16 +409,26 @@ module.exports = {
                   collector.on('collect', async (i) => {
 					try {
 						const selection = i.values[0]
-						await i.update({ components: [], content: 'Weapon Classification: ' + selection, flags: Discord.MessageFlags.Ephemeral });
-						weaponsArray[thisIndex]["type"] = selection
-						collector.stop();
-						addMoreWeapons(interaction)	
+						if (selection) { 
+							await i.update({ components: [], content: 'Weapon Classification: ' + selection, flags: Discord.MessageFlags.Ephemeral });
+							weaponsArray[thisIndex]["type"] = selection
+							collector.stop();
+							addMoreWeapons(interaction)	
+						}
+						else {
+							botLog(interaction.guild,new Discord.EmbedBuilder()
+							.setDescription('```' + err.stack + '```')
+							.setTitle(`⛔ Interaction Failed: in WeaponClass() at line 413 diagnose\n<@${interaction.user.id}> ${i}`)
+							,2
+							,'error'
+						)
+						}
 					}
 					catch (err) {
 						console.log(err)
 						botLog(interaction.guild,new Discord.EmbedBuilder()
 							.setDescription('```' + err.stack + '```')
-							.setTitle(`⛔ Fatal error experienced: in WeaponClass() at line 421 diagnose\n<@${interaction.user.id}>`)
+							.setTitle(`⛔ Fatal error experienced: in WeaponClass() at line 413 diagnose\n<@${interaction.user.id}>`)
 							,2
 							,'error'
 						)
