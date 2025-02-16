@@ -950,7 +950,7 @@ const exp = {
         if (!newMessage.author.bot) {
             try {
                 let oldContent = oldMessage?.content
-                oldContent = oldContent.replace(/`/g, "")
+                oldContent = oldContent != null ? oldContent.replace(/`/g, "") : oldContent
                 let newContent = newMessage.content || "No new content."
                 newContent = newContent.replace(/`/g, "")
                 if (!oldContent || oldContent === newContent) {
