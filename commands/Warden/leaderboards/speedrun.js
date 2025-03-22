@@ -190,6 +190,7 @@ module.exports = {
 		.setTitle(`**New Speedrun Submission**`)
 		.setDescription(`Please select Approve or Deny below if the video is legitimate and matches the fields below. NOTE: This will not assign any ranks, only approve to the Leaderboard.`)
 		.addFields(
+		{name: "Submission ID", value: `${submissionId}`, inline: true},
 		{name: "Pilot", value: `<@${user}>`, inline: true},
         {name: "Ship", value: `${args.ship}`, inline: true},
         {name: "Variant", value: `${args.variant}`, inline: true},
