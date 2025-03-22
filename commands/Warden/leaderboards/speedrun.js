@@ -97,7 +97,7 @@ module.exports = {
 						seconds: Number(item.time),
 						milliseconds: Number(item.milliseconds)
 					}
-				
+
 					function timeFunc(sec, ms) {
 						const seconds = Number(sec)
 						const milliseconds = Number(ms)
@@ -134,7 +134,7 @@ module.exports = {
 					const submission_values = [user,name,timeStuff.seconds,args.shipclass,args.ship,args.variant,args.link,false,timestamp,args.comments,timeStuff.milliseconds]
 					const submission_sql = `
 						INSERT INTO speedrun (user_id,name,time,class,ship,variant,link,approval,date,comments,milliseconds) VALUES (?,?,?,?,?,?,?,?,?,?,?);
-					`;
+					`
 					// console.log("ADD ENTRY".yellow)
 					await database.query(submission_sql, submission_values)
 				} 
@@ -190,7 +190,7 @@ module.exports = {
 		.setTitle(`**New Speedrun Submission**`)
 		.setDescription(`Please select Approve or Deny below if the video is legitimate and matches the fields below. NOTE: This will not assign any ranks, only approve to the Leaderboard.`)
 		.addFields(
-		{name: "Submission ID", value: `${submissionId}`, inline: true}, 
+		{name: "Submission ID", value: `${submissionId}`, inline: true},
 		{name: "Pilot", value: `<@${user}>`, inline: true},
         {name: "Ship", value: `${args.ship}`, inline: true},
         {name: "Variant", value: `${args.variant}`, inline: true},
