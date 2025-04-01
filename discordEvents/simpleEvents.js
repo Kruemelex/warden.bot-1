@@ -1002,6 +1002,7 @@ const exp = {
         const accountAge = joinDate - accountCreationDate
         const oneDay = 24 * 60 * 60 * 1000
         if (accountAge <= oneDay) {
+            console.log("new join",accountCreationDate,joinDate,accountAge,oneDay)
             if (botIdent().activeBot.botName == "Warden") {
                 const onion = await guild.members.fetch('346415786505666560') // Mr Onion
                 const embed = new Discord.EmbedBuilder()
