@@ -44,19 +44,17 @@ module.exports = {
                 { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
             )
         await onion.send({ embeds: [embed] })
-        // botLog(guild, new Discord.EmbedBuilder()
-        //     .setDescription(`User ${member.user.tag} (${member.displayName})`)
-        //     .setTitle(`Charcter Information`)
-        //     .addFields(
-        //         { name: `User`, value: `${member.user}` },
-        //         { name: `Within 24 hour?`, value: `${violator}`},
-        //         { name: `ID`, value: `${member.id}` },
-        //         { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
-        //         { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
-        //         { name: `Roles`, value: roles || "No roles" },
-        //     ), 2, "staff"
-        // )
-
+        botLog(bot, new Discord.EmbedBuilder()
+            .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
+            .setTitle(`New Account Joined Server`)
+            .addFields(
+                { name: `User`, value: `${member.user}` },
+                { name: `ID`, value: { name: `ID`, value: `\`\`\`${member.id}\`\`\`` }, },
+                { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
+                { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
+                { name: `Roles`, value: roles || "No roles" },
+            ), 2, "alert"
+        )
         interaction.editReply({ content: "Data sent to Mr Onion" })
     }
 }

@@ -452,6 +452,10 @@ const thisBotFunctions = {
 				logFeature = process.env.STAFFCHANNELID
                 logTranslate = 'STAFFCHANNEL'
                 break;
+            case "alert":
+				logFeature = process.env.ALERTCHANNELID
+                logTranslate = 'ALERTCHANNEL'
+                break;
             default:
                 logFeature = process.env.LOGCHANNEL
                 logTranslate = 'LOGCHANNEL'
