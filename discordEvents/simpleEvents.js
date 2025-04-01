@@ -994,6 +994,43 @@ const exp = {
             { name: `Roles`, value: `${roles}`},
         ),2)
     },
+    guildMemberAdd: async (member, bot) => {
+        let roles = ``;
+        member.roles.cache.each(role => roles += `${role}\n`)
+        const accountCreationDate = new Date(member.user.createdAt)
+        const joinDate = new Date(member.joinedTimestamp)
+        const accountAge = joinDate - accountCreationDate
+        const oneDay = 24 * 60 * 60 * 1000
+        if (accountAge <= oneDay) {
+            if (botIdent().activeBot.botName == "Warden") {
+                const onion = await guild.members.fetch('346415786505666560') // Mr Onion
+                const embed = new Discord.EmbedBuilder()
+                    .setDescription(`User ${member.user.tag} (${member.displayName})`)
+                    .setTitle(`Charcter Information`)
+                    .addFields(
+                        { name: `User`, value: `${member.user}` },
+                        { name: `Within 24 hour?`, value: `${violator}`},
+                        { name: `ID`, value: `\`\`\`${member.id}\`\`\`` },
+                        { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
+                        { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
+                    )
+                await onion.send({ embeds: [embed] })
+            }
+            if (botIdent().activeBot.botName == "GuardianAI") {
+                botLog(bot, new Discord.EmbedBuilder()
+                    .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
+                    .setTitle(`New Account Joined Server`)
+                    .addFields(
+                        { name: `User`, value: `${member.user}` },
+                        { name: `ID`, value: { name: `ID`, value: `\`\`\`${member.id}\`\`\`` }, },
+                        { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
+                        { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
+                        { name: `Roles`, value: roles || "No roles" },
+                    ), 2, "staff"
+                )
+            }
+        }
+    },
     guildScheduledEventDelete: async (event) => { 
         if (botIdent().activeBot.botName == "GuardianAI") {
             //XSF specific
