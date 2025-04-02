@@ -1001,6 +1001,7 @@ const exp = {
         const joinDate = new Date(member.joinedTimestamp)
         const accountAge = joinDate - accountCreationDate
         const oneDay = 24 * 60 * 60 * 1000
+        let violator = `\`\`\`No\`\`\``;
         if (accountAge <= oneDay) {
             violator = `\`\`\`Yes\`\`\``
             console.log("new join",
