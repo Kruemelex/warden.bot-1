@@ -1024,17 +1024,27 @@ const exp = {
                         { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
                     )
                 await onion.send({ embeds: [embed] })
-                botLog(bot, new Discord.EmbedBuilder()
-                    .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
-                    .setTitle(`New Account Joined Server`)
-                    .addFields(
-                        { name: `User`, value: `${member.user}` },
-                        { name: `ID`, value: { name: `ID`, value: `\`\`\`${member.id}\`\`\`` }, },
-                        { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
-                        { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
-                        { name: `Roles`, value: roles || "No roles" },
-                    ), 2, "alert"
-                )
+                try {
+                    botLog(bot, new Discord.EmbedBuilder()
+                        .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
+                        .setTitle(`New Account Joined Server`)
+                        .addFields(
+                            { name: `User`, value: `${member.user}` },
+                            { name: `ID`, value: { name: `ID`, value: `\`\`\`${member.id}\`\`\`` }, },
+                            { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
+                            { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
+                            { name: `Roles`, value: roles || "No roles" },
+                        ), 2, "alert"
+                    )
+                }
+                catch (e) {
+                    console.log(e)
+                    botLog(bot, new Discord.EmbedBuilder()
+                        .setDescription(`${member}`)
+                        .setTitle(`Error for 24 hour thingy`)
+                        , 2, "error"
+                    )
+                }
             }
             if (botIdent().activeBot.botName == "GuardianAI") {
                 botLog(bot, new Discord.EmbedBuilder()
