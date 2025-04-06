@@ -1040,7 +1040,7 @@ const exp = {
                 catch (e) {
                     console.log(e)
                     botLog(bot, new Discord.EmbedBuilder()
-                        .setDescription(`${member}`)
+                        .setDescription(`${e}`)
                         .setTitle(`Error for 24 hour thingy`)
                         , 2, "error"
                     )
