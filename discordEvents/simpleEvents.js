@@ -1040,8 +1040,8 @@ const exp = {
                 catch (e) {
                     console.log(e)
                     botLog(bot, new Discord.EmbedBuilder()
-                        .setDescription(`${e}`)
-                        .setTitle(`Error for 24 hour thingy`)
+                        .setDescription(`Couldn't post to #alerts.`)
+                        .setTitle(`Mr Onion has been summoned........ To do Onion things...`)
                         , 2, "error"
                     )
                 }
