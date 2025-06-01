@@ -66,9 +66,9 @@ module.exports = {
 					return
 				}
 				if (submissionData.length >= 0) {
-					let goidtype = submissionData[0].variant;
-					let approvedUserId = submissionData[0].user_id;
-					let member = i.guild.members.cache.get(approvedUserId);
+					let goidtype = submissionData[0].variant
+					let approvedUserId = submissionData[0].user_id
+					let member = i.guild.members.cache.get(approvedUserId)
 					if(goidtype == "medusa" || goidtype == "hydra") {
 						if(!(member.roles.cache.some(role => role.name === 'Myrmidon'))) {
 							let timeTaken = submissionData[0].time;
