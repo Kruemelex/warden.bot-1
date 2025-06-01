@@ -62,7 +62,7 @@ module.exports = {
 				if (submissionData.length === 0) {
 					i.channel.send({ content: `⛔ Error: ${i.member} That submission no longer exists, it may have already been denied.` })
 					//TODO ADDRESS THIS
-					console.log(i.member,submissionData,submissionData_values,"That submission no longer exists, it may have already been denied.", "ROUND 2")
+					console.log(submissionData,submissionData_values,"That submission no longer exists, it may have already been denied.", "ROUND 2")
 					return
 				}
 				if (submissionData.length >= 0) {
