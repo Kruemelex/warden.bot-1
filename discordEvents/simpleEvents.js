@@ -1023,7 +1023,7 @@ const exp = {
                         { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
                         { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
                     )
-                await onion.send({ embeds: [embed] })
+                // await onion.send({ embeds: [embed] })
                 try {
                     botLog(bot, new Discord.EmbedBuilder()
                         .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
@@ -1041,7 +1041,7 @@ const exp = {
                     console.log(e)
                     botLog(bot, new Discord.EmbedBuilder()
                         .setDescription(`Couldn't post to #alerts.`)
-                        .setTitle(`Mr Onion has been summoned........ To do Onion things...`)
+                        .setTitle(`New account created within 24 hours and has joined the server.`)
                         , 2, "error"
                     )
                 }
