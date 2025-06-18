@@ -1030,7 +1030,7 @@ const exp = {
                         .setTitle(`New Account Joined Server`)
                         .addFields(
                             { name: `User`, value: `${member.user}` },
-                            { name: `ID`, value: { name: `ID`, value: `\`\`\`${member.id}\`\`\`` }, },
+                            { name: `ID`, value: `\`\`\`${member.id}\`\`\`` },
                             { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
                             { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
                             { name: `Roles`, value: roles || "No roles" },
