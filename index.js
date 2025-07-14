@@ -286,42 +286,42 @@ function mainOperation(){
 		bot.on('debug', console.log) 
 		bot.on('warn', console.log)
 	}
-	bot.rest.on('rateLimited', (info) => {
-		/**
-	   * 
-	   * @param {rate limit} item 
-	   * 4. Specific API Limits
-			API Action	Rate Limit
-			Sending Messages	    	5 requests per channel per 5 seconds.
-			Editing Messages	    	5 requests per message per 5 seconds.
-			Reaction Add/Remove	    	1 request per 1 second per user.
-			Channel Modifications		2 requests per 10 seconds per channel.
-			Guild Member Modifications	10 requests per 10 seconds per guild.
-			Command Interactions		Limited by user interaction timing (~1 second).
-	   */
-		console.log('Potential Rate limit hit:'.red);
-		console.log(info)
-		botFunc.botLog(guild,new Discord.EmbedBuilder()
-			.setTitle(`⛔ Potential Rate Limit`)
-			.setDescription('Monitor server for rate limiting.')
-			.addFields(
-				{ name: `Global:`, value: `${info.global}`, inline: false },
-				{ name: `Hash:`, value: `${info.hash}`, inline: false },
-				{ name: `Limit:`, value: `${info.limit}`, inline: false },
-				{ name: `majorParameter:`, value: `${info.majorParameter}`, inline: false },
-				{ name: `method:`, value: `${info.method}`, inline: false },
-				{ name: `name:`, value: `${info.name}`, inline: false },
-				{ name: `retryAfter:`, value: `${info.retryAfter}`, inline: false },
-				{ name: `route:`, value: `${info.route}`, inline: false },
-				{ name: `scope:`, value: `${info.scope}`, inline: false },
-				{ name: `sublimitTimeout:`, value: `${info.sublimitTimeout}`, inline: false },
-				{ name: `timeToReset(ms):`, value: `${info.timeToReset}`, inline: false },
-				{ name: `url:`, value: `${info.url}`, inline: false }, 
-			)
-			,2
-			,'error'
-		)
-	})
+	// bot.rest.on('rateLimited', (info) => {
+	// 	/**
+	//    * 
+	//    * @param {rate limit} item 
+	//    * 4. Specific API Limits
+	// 		API Action	Rate Limit
+	// 		Sending Messages	    	5 requests per channel per 5 seconds.
+	// 		Editing Messages	    	5 requests per message per 5 seconds.
+	// 		Reaction Add/Remove	    	1 request per 1 second per user.
+	// 		Channel Modifications		2 requests per 10 seconds per channel.
+	// 		Guild Member Modifications	10 requests per 10 seconds per guild.
+	// 		Command Interactions		Limited by user interaction timing (~1 second).
+	//    */
+	// 	console.log('Potential Rate limit hit:'.red);
+	// 	console.log(info)
+	// 	botFunc.botLog(guild,new Discord.EmbedBuilder()
+	// 		.setTitle(`⛔ Potential Rate Limit`)
+	// 		.setDescription('Monitor server for rate limiting.')
+	// 		.addFields(
+	// 			{ name: `Global:`, value: `${info.global}`, inline: false },
+	// 			{ name: `Hash:`, value: `${info.hash}`, inline: false },
+	// 			{ name: `Limit:`, value: `${info.limit}`, inline: false },
+	// 			{ name: `majorParameter:`, value: `${info.majorParameter}`, inline: false },
+	// 			{ name: `method:`, value: `${info.method}`, inline: false },
+	// 			{ name: `name:`, value: `${info.name}`, inline: false },
+	// 			{ name: `retryAfter:`, value: `${info.retryAfter}`, inline: false },
+	// 			{ name: `route:`, value: `${info.route}`, inline: false },
+	// 			{ name: `scope:`, value: `${info.scope}`, inline: false },
+	// 			{ name: `sublimitTimeout:`, value: `${info.sublimitTimeout}`, inline: false },
+	// 			{ name: `timeToReset(ms):`, value: `${info.timeToReset}`, inline: false },
+	// 			{ name: `url:`, value: `${info.url}`, inline: false }, 
+	// 		)
+	// 		,2
+	// 		,'error'
+	// 	)
+	// })
 	  
 	// Have the bot login
 	function checkENV(item) {
