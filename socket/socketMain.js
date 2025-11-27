@@ -21,7 +21,12 @@ if (process.env.SOCKET_TOKEN && process.env.MODE == "PROD") {
             withCredentials: true,
             auth: {
                 token: token
-            }
+            },
+            reconnection: true,               // allow reconnects
+            reconnectionAttempts: Infinity,   // keep retrying
+            reconnectionDelay: 1000,          // 1s initial delay
+            reconnectionDelayMax: 5000,       // 5s max delay
+            timeout: 20000                    // 20s connection timeout
         })
         
         const socket = manager.socket("/")
@@ -66,6 +71,13 @@ if (process.env.SOCKET_TOKEN && process.env.MODE == "PROD") {
         })
         socket.io.on("reconnect_attempt", (e) => {
              console.log("[SOCKET CLIENT]".blue,"Reconnect Attempt # ".red,e) 
+        })
+        manager.on("connect_error", (err) => {
+            console.log("[SOCKET CLIENT]".blue,"Connect Error:", err.message)
+        })
+
+        manager.on("connect_timeout", (timeout) => {
+            console.log("[SOCKET CLIENT]".blue,"Connect Timeout:", timeout)
         })
         
     }
