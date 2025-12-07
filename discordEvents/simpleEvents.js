@@ -908,17 +908,17 @@ const exp = {
             }
             const { executor, target, createdTimestamp } = deletionLog
             if (target.id !== message.author.id || Date.now() - createdTimestamp > 5000) {
-                // console.log(`${message.author.tag} deleted their own message.`)
+                console.log(`${message.author.tag} deleted their own message.`)
                 deletedBy = message.author
                 sendEmbed(deletedBy)
                 return
             }
             if (executor.id === message.author.id) {
-                // console.log(`${executor.tag} (a mod) deleted their own message.`)
+                console.log(`${executor.tag} (a mod) deleted their own message.`)
                 deletedBy = executor
                 sendEmbed(deletedBy)
             } else {
-                // console.log(`${executor.tag} deleted a message from ${message.author.tag}.`)
+                console.log(`${executor.tag} deleted a message from ${message.author.tag}.`)
                 deletedBy = executor
                 sendEmbed(deletedBy)
             }
