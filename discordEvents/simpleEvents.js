@@ -985,6 +985,44 @@ const exp = {
     messageUpdate: async (oldMessage, newMessage, bot) => {
         if (newMessage.author.bot) return
         try {
+             function hasAnyImage(msg) {
+    if (!msg) return false
+
+    // Attachments (uploads)
+    if (msg.attachments && msg.attachments.size) {
+      for (const [, att] of msg.attachments) {
+        if (att?.contentType?.startsWith('image/')) return true
+
+        const name = att?.name?.toLowerCase()
+        if (!name) continue
+        if (
+          name.endsWith('.png') ||
+          name.endsWith('.jpg') ||
+          name.endsWith('.jpeg') ||
+          name.endsWith('.gif') ||
+          name.endsWith('.webp') ||
+          name.endsWith('.bmp') ||
+          name.endsWith('.tiff') ||
+          name.endsWith('.svg')
+        ) return true
+      }
+    }
+
+    // Embeds (link previews / image embeds)
+    if (msg.embeds && msg.embeds.length) {
+      for (const e of msg.embeds) {
+        if (!e) continue
+        if (e.image?.url) return true
+        if (e.thumbnail?.url) return true
+        if (e.type === 'image' || e.type === 'gifv') return true
+      }
+    }
+
+    return false
+  }
+
+  // ✅ Ignore message updates involving any image
+  if (hasAnyImage(newMessage) || hasAnyImage(oldMessage)) return
         function neutralizeCodeFences(s) {
             if (typeof s !== 'string') return ''
 
