@@ -946,42 +946,165 @@ const exp = {
             console.error("Error fetching audit logs:", error)
         }
     },
-    messageUpdate: async (oldMessage, newMessage, bot) => {
-        if (!newMessage.author.bot) {
-            try {
-                let oldContent = oldMessage?.content
-                oldContent = oldContent != null ? oldContent.replace(/`/g, "") : oldContent
-                let newContent = newMessage.content || "No new content."
-                newContent = newContent.replace(/`/g, "")
-                if (!oldContent || oldContent === newContent) {
-                    oldContent = "Bot: Cache Unvailable / Same Content / "
-                }
-                if (oldContent.length >= 2000) {
-                    botLog(bot, new Discord.EmbedBuilder()
-                        .setDescription(`Message updated by user: ${newMessage.author}\n\`\`\`${oldContent}\`\`\``)
-                        .setTitle(`Original Message 📝`), 3)
+    // messageUpdate: async (oldMessage, newMessage, bot) => {
+    //     if (!newMessage.author.bot) {
+    //         try {
+    //             let oldContent = oldMessage?.content
+    //             oldContent = oldContent != null ? oldContent.replace(/`/g, "") : oldContent
+    //             let newContent = newMessage.content || "No new content."
+    //             newContent = newContent.replace(/`/g, "")
+    //             if (!oldContent || oldContent === newContent) {
+    //                 oldContent = "Bot: Cache Unvailable / Same Content / "
+    //             }
+    //             if (oldContent.length >= 2000) {
+    //                 botLog(bot, new Discord.EmbedBuilder()
+    //                     .setDescription(`Message updated by user: ${newMessage.author}\n\`\`\`${oldContent}\`\`\``)
+    //                     .setTitle(`Original Message 📝`), 3)
     
-                    botLog(bot, new Discord.EmbedBuilder()
-                        .setDescription(`\`\`\`${newContent}\`\`\`\nMessage Link: ${newMessage.url}`)
-                        .setTitle(`Updated Message 📝`), 3)
-                } else {
-                    botLog(bot, new Discord.EmbedBuilder()
-                        .setDescription(`Message updated by user: ${newMessage.author}\n` +
-                            `- Old Message\`\`\`${oldContent}\`\`\`\n` +
-                            `- New Message\`\`\`${newContent}\`\`\`\n` +
-                            `- Message Link: ${newMessage.url}`)
-                        .setTitle(`Message Updated 📝`), 3)
+    //                 botLog(bot, new Discord.EmbedBuilder()
+    //                     .setDescription(`\`\`\`${newContent}\`\`\`\nMessage Link: ${newMessage.url}`)
+    //                     .setTitle(`Updated Message 📝`), 3)
+    //             } else {
+    //                 botLog(bot, new Discord.EmbedBuilder()
+    //                     .setDescription(`Message updated by user: ${newMessage.author}\n` +
+    //                         `- Old Message\`\`\`${oldContent}\`\`\`\n` +
+    //                         `- New Message\`\`\`${newContent}\`\`\`\n` +
+    //                         `- Message Link: ${newMessage.url}`)
+    //                     .setTitle(`Message Updated 📝`), 3)
+    //             }
+    //         } catch (err) {
+    //             botLog(guild,new Discord.EmbedBuilder()
+    //                 .setTitle(`⛔ Error Handling messageUpdate() in simpleEvents.js`)
+    //                 .setDescription('```' + err.stack + '```')
+    //                 ,2
+    //                 ,'error'
+    //             )
+    //         }
+    //     }
+    // },    
+    messageUpdate: async (oldMessage, newMessage, bot) => {
+        if (newMessage.author.bot) return
+        try {
+        function hasAnyImage(msg) {
+            if (!msg) return false
+
+            // Attachments (uploads)
+            if (msg.attachments && msg.attachments.size) {
+            for (const [, att] of msg.attachments) {
+                // Discord.js v14 attachments often have contentType
+                if (att && att.contentType && String(att.contentType).startsWith('image/')) return true
+
+                // Fallback by filename extension
+                const name = att && att.name ? String(att.name).toLowerCase() : ''
+                if (name) {
+                if (name.endsWith('.png')) return true
+                if (name.endsWith('.jpg')) return true
+                if (name.endsWith('.jpeg')) return true
+                if (name.endsWith('.gif')) return true
+                if (name.endsWith('.webp')) return true
+                if (name.endsWith('.bmp')) return true
+                if (name.endsWith('.tiff')) return true
+                if (name.endsWith('.svg')) return true
                 }
-            } catch (err) {
-                botLog(guild,new Discord.EmbedBuilder()
-                    .setTitle(`⛔ Error Handling messageUpdate() in simpleEvents.js`)
-                    .setDescription('```' + err.stack + '```')
-                    ,2
-                    ,'error'
-                )
             }
+            }
+
+            // Embeds (link previews / image embeds)
+            if (msg.embeds && msg.embeds.length) {
+            for (const e of msg.embeds) {
+                if (!e) continue
+                if (e.image && e.image.url) return true
+                if (e.thumbnail && e.thumbnail.url) return true
+                if (e.type === 'image') return true
+                if (e.type === 'gifv') return true
+            }
+            }
+
+            return false
         }
-    },    
+
+        // ✅ Ignore message updates involving any image
+        if (hasAnyImage(newMessage) || hasAnyImage(oldMessage)) return
+
+        function stripBackticks(s) {
+            if (typeof s !== 'string') return ''
+            return s.replace(/`/g, '')
+        }
+
+        // Keep your "2000" protection rule exactly
+        const MAX = 2000
+
+        // Truncate helper so even if code fences + labels push it over, it won’t explode
+        function safeSlice(s, max) {
+            if (typeof s !== 'string') s = String(s || '')
+            if (s.length <= max) return s
+            return s.slice(0, max - 14) + '\n…(truncated)'
+        }
+
+        let oldContent = stripBackticks(oldMessage && oldMessage.content ? oldMessage.content : '')
+        let newContent = stripBackticks(typeof newMessage.content === 'string' ? newMessage.content : '')
+
+        if (!newContent) newContent = 'No new content.'
+
+        // Your original intent: if cache is missing OR content didn't change
+        if (!oldContent || oldContent === newContent) {
+            oldContent = 'Bot: Cache Unvailable'
+        }
+
+        // Keep your split decision EXACTLY the same:
+        if (oldContent.length >= MAX) {
+            // Make each block safe for your 2000 rule (accounting for wrapper text)
+            const oldSafe = safeSlice(oldContent, MAX)
+            const newSafe = safeSlice(newContent, MAX)
+
+            botLog(
+                bot,
+                new Discord.EmbedBuilder()
+                    .setTitle('Original Message 📝')
+                    .setDescription(`Message updated by user: ${newMessage.author}\n\`\`\`${oldSafe}\`\`\``),
+                5,
+                'messages'
+            )
+
+            botLog(
+                bot,
+                new Discord.EmbedBuilder()
+                    .setTitle('Updated Message 📝')
+                    .setDescription(`\`\`\`${newSafe}\`\`\`\nMessage Link: ${newMessage.url}`),
+                5,
+                'messages'
+            )
+        } else {
+            // Single embed path — still guard against accidental overflow
+            const oldSafe = safeSlice(oldContent, MAX)
+            const newSafe = safeSlice(newContent, MAX)
+
+            botLog(
+            bot,
+            new Discord.EmbedBuilder()
+                .setTitle('Message Updated 📝')
+                .setDescription(
+                `Message updated by user: ${newMessage.author}\n` +
+                `- Old Message\`\`\`${oldSafe}\`\`\`\n` +
+                `- New Message\`\`\`${newSafe}\`\`\`\n` +
+                `- Message Link: ${newMessage.url}`
+                ),
+            5,
+            'messages'
+            )
+        }
+        } catch (err) {
+        botLog(
+            bot,
+            new Discord.EmbedBuilder()
+            .setTitle('⛔ Error Handling messageUpdate() in simpleEvents.js')
+            .setDescription('```' + (err && err.stack ? err.stack : String(err)) + '```'),
+            2,
+            'error'
+        )
+        }
+
+    },
     guildMemberRemove: async (member, bot) => { 
         let roles = ``
         member.roles.cache.each(role => roles += `${role}\n`)
