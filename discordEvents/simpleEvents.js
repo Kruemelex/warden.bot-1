@@ -985,97 +985,62 @@ const exp = {
     messageUpdate: async (oldMessage, newMessage, bot) => {
         if (newMessage.author.bot) return
         try {
-        function hasAnyImage(msg) {
-            if (!msg) return false
-
-            // Attachments (uploads)
-            if (msg.attachments && msg.attachments.size) {
-            for (const [, att] of msg.attachments) {
-                // Discord.js v14 attachments often have contentType
-                if (att && att.contentType && String(att.contentType).startsWith('image/')) return true
-
-                // Fallback by filename extension
-                const name = att && att.name ? String(att.name).toLowerCase() : ''
-                if (name) {
-                if (name.endsWith('.png')) return true
-                if (name.endsWith('.jpg')) return true
-                if (name.endsWith('.jpeg')) return true
-                if (name.endsWith('.gif')) return true
-                if (name.endsWith('.webp')) return true
-                if (name.endsWith('.bmp')) return true
-                if (name.endsWith('.tiff')) return true
-                if (name.endsWith('.svg')) return true
-                }
-            }
-            }
-
-            // Embeds (link previews / image embeds)
-            if (msg.embeds && msg.embeds.length) {
-            for (const e of msg.embeds) {
-                if (!e) continue
-                if (e.image && e.image.url) return true
-                if (e.thumbnail && e.thumbnail.url) return true
-                if (e.type === 'image') return true
-                if (e.type === 'gifv') return true
-            }
-            }
-
-            return false
-        }
-
-        // ✅ Ignore message updates involving any image
-        if (hasAnyImage(newMessage) || hasAnyImage(oldMessage)) return
-
-        function stripBackticks(s) {
+        function neutralizeCodeFences(s) {
             if (typeof s !== 'string') return ''
-            return s.replace(/`/g, '')
+
+            // Break any run of 3+ backticks so it cannot form a code fence
+            return s.replace(/`{3,}/g, m => m.slice(0, 2) + '\u200b' + m.slice(2))
         }
 
-        // Keep your "2000" protection rule exactly
         const MAX = 2000
 
-        // Truncate helper so even if code fences + labels push it over, it won’t explode
         function safeSlice(s, max) {
             if (typeof s !== 'string') s = String(s || '')
             if (s.length <= max) return s
-            return s.slice(0, max - 14) + '\n…(truncated)'
+            return s.slice(0, Math.max(0, max - 14)) + '\n…(truncated)'
         }
 
-        let oldContent = stripBackticks(oldMessage && oldMessage.content ? oldMessage.content : '')
-        let newContent = stripBackticks(typeof newMessage.content === 'string' ? newMessage.content : '')
+        function wrapCodeBlock(content) {
+            content = typeof content === 'string' ? content : String(content || '')
+            return `\`\`\`\n${content}\n\`\`\``
+        }
+
+        let oldContent = neutralizeCodeFences(typeof oldMessage?.content === 'string' ? oldMessage.content : '')
+        let newContent = neutralizeCodeFences(typeof newMessage.content === 'string' ? newMessage.content : '')
 
         if (!newContent) newContent = 'No new content.'
 
-        // Your original intent: if cache is missing OR content didn't change
         if (!oldContent || oldContent === newContent) {
             oldContent = 'Bot: Cache Unvailable'
         }
 
-        // Keep your split decision EXACTLY the same:
         if (oldContent.length >= MAX) {
-            // Make each block safe for your 2000 rule (accounting for wrapper text)
             const oldSafe = safeSlice(oldContent, MAX)
             const newSafe = safeSlice(newContent, MAX)
 
             botLog(
-                bot,
-                new Discord.EmbedBuilder()
-                    .setTitle('Original Message 📝')
-                    .setDescription(`Message updated by user: ${newMessage.author}\n\`\`\`${oldSafe}\`\`\``),
-                5,
-                'messages'
+            bot,
+            new Discord.EmbedBuilder()
+                .setTitle('Original Message 📝')
+                .setDescription(
+                `Message updated by user: ${newMessage.author}\n` +
+                wrapCodeBlock(oldSafe)
+                ),
+            3,
+            'messages'
             )
 
             botLog(
-                bot,
-                new Discord.EmbedBuilder()
-                    .setTitle('Updated Message 📝')
-                    .setDescription(`\`\`\`${newSafe}\`\`\`\nMessage Link: ${newMessage.url}`),
-                5,
-                'messages'
+            bot,
+            new Discord.EmbedBuilder()
+                .setTitle('Updated Message 📝')
+                .setDescription(
+                wrapCodeBlock(newSafe) + `\nMessage Link: ${newMessage.url}`
+                ),
+            3,
+            'messages'
             )
         } else {
-            // Single embed path — still guard against accidental overflow
             const oldSafe = safeSlice(oldContent, MAX)
             const newSafe = safeSlice(newContent, MAX)
 
@@ -1085,20 +1050,21 @@ const exp = {
                 .setTitle('Message Updated 📝')
                 .setDescription(
                 `Message updated by user: ${newMessage.author}\n` +
-                `- Old Message\`\`\`${oldSafe}\`\`\`\n` +
-                `- New Message\`\`\`${newSafe}\`\`\`\n` +
-                `- Message Link: ${newMessage.url}`
+                `Old Message\n` + wrapCodeBlock(oldSafe) + `\n` +
+                `New Message\n` + wrapCodeBlock(newSafe) + `\n` +
+                `Message Link: ${newMessage.url}`
                 ),
-            5,
+            3,
             'messages'
             )
         }
-        } catch (err) {
+        } 
+        catch (err) {
         botLog(
             bot,
             new Discord.EmbedBuilder()
             .setTitle('⛔ Error Handling messageUpdate() in simpleEvents.js')
-            .setDescription('```' + (err && err.stack ? err.stack : String(err)) + '```'),
+            .setDescription('```' + (err?.stack || String(err)) + '```'),
             2,
             'error'
         )
