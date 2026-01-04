@@ -421,54 +421,80 @@ const thisBotFunctions = {
         )
     },
     botLog: async (bot,embed,severity,logType) => {
-        require("dotenv").config({ path: `./${thisBotFunctions.botIdent().activeBot.env}/` });
+        /**
+         * botLog(
+                @param *guild object required
+                ,new Discord.EmbedBuilder()
+                    .setTitle(``)
+                    .addFields(
+                        { name: ":x: Error Code", value: e }
+                    )
+                ,@number *Select Color
+                ,@param  *Select Log Type (Default to LOGCHANNEL)
+            )
+         */
 		let logColor
 		switch (severity) {
 			case 0:
 				logColor = '#42f569' //Green
-				break;
+				break
 			case 1:
 				logColor = '#f5bf42' //Orange
-				break;
+				break
 			case 2:
 				logColor = '#f55142' //Red
-				break;
-            case 3:
-                logColor = '#000000' //Nothing
-                break;
+				break
+            case 3: 
+                logColor = '#87FF2A' //Bright Green
+                break
+            case 4: 
+                logColor = '#f20505' //Bright Red
+                break
+            case 5: 
+                logColor = '#f2ff00' //Bright Yellow
+                break   
+            case 6: 
+                logColor = '#008B8B' //Dark Cyan
+                break   
 		}
+// .setColor('#87FF2A') //bight green
+// .setColor('#f20505') //bight red 
+// .setColor('#f2ff00') //bight yellow
         let logFeature
         let logTranslate
         switch (logType) {
+            case "messages":
+				logFeature = thisBotFunctions.botIdent().activeBot.messagesChannel
+                logTranslate = 'MESSAGESCHANNEL'
+                break;
 			case "info":
-				logFeature = process.env.LOGCHANNEL
+				logFeature = thisBotFunctions.botIdent().activeBot.logsChannel
                 logTranslate = 'LOGCHANNEL'
                 break;
-            case "error":
-                logFeature = process.env.ERRORCHANNEL
-                logTranslate = 'ERRORCHANNEL'
-                break;
             case "staff":
-				logFeature = process.env.STAFFCHANNELID
+				logFeature = thisBotFunctions.botIdent().activeBot.staffChannel
                 logTranslate = 'STAFFCHANNEL'
                 break;
-            case "alert":
-				logFeature = process.env.ALERTCHANNELID
-                logTranslate = 'ALERTCHANNEL'
+            case "error":
+                logFeature = thisBotFunctions.botIdent().activeBot.errorChannel
+                logTranslate = 'ERRORCHANNEL'
                 break;
-            default:
-                logFeature = process.env.LOGCHANNEL
+            case "newbuild":
+                logFeature = thisBotFunctions.botIdent().activeBot.newBuildChannel
+                logTranslate = 'NEWBUILD'
+                break;
+            default: 
+                logFeature = thisBotFunctions.botIdent().activeBot.logsChannel
                 logTranslate = 'LOGCHANNEL'
 		}
 		embed.setColor(logColor)
-		.setTimestamp()
-		.setFooter({ text: `${thisBotFunctions.botIdent().activeBot.botName}  Logs`, iconURL: thisBotFunctions.botIdent().activeBot.icon });
+            .setTimestamp()
+            .setFooter({ text: `${thisBotFunctions.botIdent().activeBot.botName}  Logs`, iconURL: thisBotFunctions.botIdent().activeBot.icon });
 		if (logFeature) {
             await bot.channels.cache.get(logFeature).send({ embeds: [embed], })
-            // await bot.channels.cache.get(process.env.LOGCHANNEL).send({ content: "rate limiting validation, if buttons are present DO NOT touch in this channel.", embeds: [embed], })
         }
         else {
-            console.error(`ERROR: ${logTranslate} Environment Variable NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
+            console.error(`ERROR: ${logTranslate} botTypes configuration for channels NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
         }
 	},
     getSortedRoleIDs: (message) => {
