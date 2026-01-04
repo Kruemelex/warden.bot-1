@@ -358,7 +358,12 @@
             "ignoreCommands": ["sheriff","reminder"],
             "socketRoom": {
                 "id":"AXI-guardianAI"
-            }
+            },
+            "messagesChannel": "470640516430823445",
+            "logsChannel": "470640516430823445",
+            "errorChannel": "1238077227002761256",
+            "staffChannel": "719320766176428033",
+            "bansChannel": "470640516430823445"
         },
         {
             "env": "GuardianAI.env",
@@ -372,7 +377,12 @@
             "ignoreCommands": [],
             "socketRoom": {
                 "id":"AXI-guardianAI"
-            }
+            },
+            "messagesChannel": "1457490153873346663",
+            "logsChannel": "1173411690545688676",
+            "errorChannel": "1282406905662410857",
+            "staffChannel": "1173411690545688676",
+            "bansChannel": "1173411690545688676"
         }
     ]
 }
