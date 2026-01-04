@@ -946,156 +946,120 @@ const exp = {
             console.error("Error fetching audit logs:", error)
         }
     },
-    // messageUpdate: async (oldMessage, newMessage, bot) => {
-    //     if (!newMessage.author.bot) {
-    //         try {
-    //             let oldContent = oldMessage?.content
-    //             oldContent = oldContent != null ? oldContent.replace(/`/g, "") : oldContent
-    //             let newContent = newMessage.content || "No new content."
-    //             newContent = newContent.replace(/`/g, "")
-    //             if (!oldContent || oldContent === newContent) {
-    //                 oldContent = "Bot: Cache Unvailable / Same Content / "
-    //             }
-    //             if (oldContent.length >= 2000) {
-    //                 botLog(bot, new Discord.EmbedBuilder()
-    //                     .setDescription(`Message updated by user: ${newMessage.author}\n\`\`\`${oldContent}\`\`\``)
-    //                     .setTitle(`Original Message 📝`), 3)
-    
-    //                 botLog(bot, new Discord.EmbedBuilder()
-    //                     .setDescription(`\`\`\`${newContent}\`\`\`\nMessage Link: ${newMessage.url}`)
-    //                     .setTitle(`Updated Message 📝`), 3)
-    //             } else {
-    //                 botLog(bot, new Discord.EmbedBuilder()
-    //                     .setDescription(`Message updated by user: ${newMessage.author}\n` +
-    //                         `- Old Message\`\`\`${oldContent}\`\`\`\n` +
-    //                         `- New Message\`\`\`${newContent}\`\`\`\n` +
-    //                         `- Message Link: ${newMessage.url}`)
-    //                     .setTitle(`Message Updated 📝`), 3)
-    //             }
-    //         } catch (err) {
-    //             botLog(guild,new Discord.EmbedBuilder()
-    //                 .setTitle(`⛔ Error Handling messageUpdate() in simpleEvents.js`)
-    //                 .setDescription('```' + err.stack + '```')
-    //                 ,2
-    //                 ,'error'
-    //             )
-    //         }
-    //     }
-    // },    
     messageUpdate: async (oldMessage, newMessage, bot) => {
         if (newMessage.author.bot) return
         try {
-             function hasAnyImage(msg) {
-    if (!msg) return false
+            function hasAnyImage(msg) {
+                if (!msg) return false
 
-    // Attachments (uploads)
-    if (msg.attachments && msg.attachments.size) {
-      for (const [, att] of msg.attachments) {
-        if (att?.contentType?.startsWith('image/')) return true
+                // Attachments (uploads)
+                if (msg.attachments && msg.attachments.size) {
+                for (const [, att] of msg.attachments) {
+                    if (att?.contentType?.startsWith('image/')) return true
 
-        const name = att?.name?.toLowerCase()
-        if (!name) continue
-        if (
-          name.endsWith('.png') ||
-          name.endsWith('.jpg') ||
-          name.endsWith('.jpeg') ||
-          name.endsWith('.gif') ||
-          name.endsWith('.webp') ||
-          name.endsWith('.bmp') ||
-          name.endsWith('.tiff') ||
-          name.endsWith('.svg')
-        ) return true
-      }
-    }
+                    const name = att?.name?.toLowerCase()
+                    if (!name) continue
+                    if (
+                    name.endsWith('.png') ||
+                    name.endsWith('.jpg') ||
+                    name.endsWith('.jpeg') ||
+                    name.endsWith('.gif') ||
+                    name.endsWith('.webp') ||
+                    name.endsWith('.bmp') ||
+                    name.endsWith('.tiff') ||
+                    name.endsWith('.svg')
+                    ) return true
+                }
+            }
 
-    // Embeds (link previews / image embeds)
-    if (msg.embeds && msg.embeds.length) {
-      for (const e of msg.embeds) {
-        if (!e) continue
-        if (e.image?.url) return true
-        if (e.thumbnail?.url) return true
-        if (e.type === 'image' || e.type === 'gifv') return true
-      }
-    }
-
-    return false
-  }
-
-  // ✅ Ignore message updates involving any image
-  if (hasAnyImage(newMessage) || hasAnyImage(oldMessage)) return
-        function neutralizeCodeFences(s) {
-            if (typeof s !== 'string') return ''
-
-            // Break any run of 3+ backticks so it cannot form a code fence
-            return s.replace(/`{3,}/g, m => m.slice(0, 2) + '\u200b' + m.slice(2))
+            // Embeds (link previews / image embeds)
+            if (msg.embeds && msg.embeds.length) {
+            for (const e of msg.embeds) {
+                if (!e) continue
+                if (e.image?.url) return true
+                if (e.thumbnail?.url) return true
+                if (e.type === 'image' || e.type === 'gifv') return true
+            }
         }
 
-        const MAX = 2000
+        return false
+            }
 
-        function safeSlice(s, max) {
-            if (typeof s !== 'string') s = String(s || '')
-            if (s.length <= max) return s
-            return s.slice(0, Math.max(0, max - 14)) + '\n…(truncated)'
-        }
+            // ✅ Ignore message updates involving any image
+            if (hasAnyImage(newMessage) || hasAnyImage(oldMessage)) return
+            function neutralizeCodeFences(s) {
+                if (typeof s !== 'string') return ''
 
-        function wrapCodeBlock(content) {
-            content = typeof content === 'string' ? content : String(content || '')
-            return `\`\`\`\n${content}\n\`\`\``
-        }
+                // Break any run of 3+ backticks so it cannot form a code fence
+                return s.replace(/`{3,}/g, m => m.slice(0, 2) + '\u200b' + m.slice(2))
+            }
 
-        let oldContent = neutralizeCodeFences(typeof oldMessage?.content === 'string' ? oldMessage.content : '')
-        let newContent = neutralizeCodeFences(typeof newMessage.content === 'string' ? newMessage.content : '')
+            const MAX = 2000
 
-        if (!newContent) newContent = 'No new content.'
+            function safeSlice(s, max) {
+                if (typeof s !== 'string') s = String(s || '')
+                if (s.length <= max) return s
+                return s.slice(0, Math.max(0, max - 14)) + '\n…(truncated)'
+            }
 
-        if (!oldContent || oldContent === newContent) {
-            oldContent = 'Bot: Cache Unvailable'
-        }
+            function wrapCodeBlock(content) {
+                content = typeof content === 'string' ? content : String(content || '')
+                return `\`\`\`\n${content}\n\`\`\``
+            }
 
-        if (oldContent.length >= MAX) {
-            const oldSafe = safeSlice(oldContent, MAX)
-            const newSafe = safeSlice(newContent, MAX)
+            let oldContent = neutralizeCodeFences(typeof oldMessage?.content === 'string' ? oldMessage.content : '')
+            let newContent = neutralizeCodeFences(typeof newMessage.content === 'string' ? newMessage.content : '')
 
-            botLog(
-            bot,
-            new Discord.EmbedBuilder()
-                .setTitle('Original Message 📝')
-                .setDescription(
-                `Message updated by user: ${newMessage.author}\n` +
-                wrapCodeBlock(oldSafe)
-                ),
-            3,
-            'messages'
-            )
+            if (!newContent) newContent = 'No new content.'
 
-            botLog(
-            bot,
-            new Discord.EmbedBuilder()
-                .setTitle('Updated Message 📝')
-                .setDescription(
-                wrapCodeBlock(newSafe) + `\nMessage Link: ${newMessage.url}`
-                ),
-            3,
-            'messages'
-            )
-        } else {
-            const oldSafe = safeSlice(oldContent, MAX)
-            const newSafe = safeSlice(newContent, MAX)
+            if (!oldContent || oldContent === newContent) {
+                oldContent = 'Bot: Cache Unvailable'
+            }
 
-            botLog(
-            bot,
-            new Discord.EmbedBuilder()
-                .setTitle('Message Updated 📝')
-                .setDescription(
-                `Message updated by user: ${newMessage.author}\n` +
-                `Old Message\n` + wrapCodeBlock(oldSafe) + `\n` +
-                `New Message\n` + wrapCodeBlock(newSafe) + `\n` +
-                `Message Link: ${newMessage.url}`
-                ),
-            3,
-            'messages'
-            )
-        }
+            if (oldContent.length >= MAX) {
+                const oldSafe = safeSlice(oldContent, MAX)
+                const newSafe = safeSlice(newContent, MAX)
+
+                botLog(
+                bot,
+                new Discord.EmbedBuilder()
+                    .setTitle('Original Message 📝')
+                    .setDescription(
+                    `Message updated by user: ${newMessage.author}\n` +
+                    wrapCodeBlock(oldSafe)
+                    ),
+                3,
+                'messages'
+                )
+
+                botLog(
+                bot,
+                new Discord.EmbedBuilder()
+                    .setTitle('Updated Message 📝')
+                    .setDescription(
+                    wrapCodeBlock(newSafe) + `\nMessage Link: ${newMessage.url}`
+                    ),
+                3,
+                'messages'
+                )
+            } else {
+                const oldSafe = safeSlice(oldContent, MAX)
+                const newSafe = safeSlice(newContent, MAX)
+
+                botLog(
+                bot,
+                new Discord.EmbedBuilder()
+                    .setTitle('Message Updated 📝')
+                    .setDescription(
+                    `Message updated by user: ${newMessage.author}\n` +
+                    `Old Message\n` + wrapCodeBlock(oldSafe) + `\n` +
+                    `New Message\n` + wrapCodeBlock(newSafe) + `\n` +
+                    `Message Link: ${newMessage.url}`
+                    ),
+                3,
+                'messages'
+                )
+            }
         } 
         catch (err) {
         botLog(
