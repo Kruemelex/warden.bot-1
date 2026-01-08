@@ -949,129 +949,133 @@ const exp = {
     messageUpdate: async (oldMessage, newMessage, bot) => {
         if (newMessage.author.bot) return
         try {
-            function hasAnyImage(msg) {
-                if (!msg) return false
-
-                // Attachments (uploads)
-                if (msg.attachments && msg.attachments.size) {
-                for (const [, att] of msg.attachments) {
-                    if (att?.contentType?.startsWith('image/')) return true
-
-                    const name = att?.name?.toLowerCase()
-                    if (!name) continue
-                    if (
-                    name.endsWith('.png') ||
-                    name.endsWith('.jpg') ||
-                    name.endsWith('.jpeg') ||
-                    name.endsWith('.gif') ||
-                    name.endsWith('.webp') ||
-                    name.endsWith('.bmp') ||
-                    name.endsWith('.tiff') ||
-                    name.endsWith('.svg')
-                    ) return true
-                }
+            if (oldMessage && oldMessage.partial) {
+            try {
+                oldMessage = await oldMessage.fetch()
+            } catch (e) {
+                oldMessage = null
+            }
             }
 
-            // Embeds (link previews / image embeds)
-            if (msg.embeds && msg.embeds.length) {
-            for (const e of msg.embeds) {
-                if (!e) continue
-                if (e.image?.url) return true
-                if (e.thumbnail?.url) return true
-                if (e.type === 'image' || e.type === 'gifv') return true
+            if (newMessage && newMessage.partial) {
+            try {
+                newMessage = await newMessage.fetch()
+            } catch (e) {
+                // continue with what we have
             }
-        }
-
-        return false
             }
 
-            // ✅ Ignore message updates involving any image
-            if (hasAnyImage(newMessage) || hasAnyImage(oldMessage)) return
+            const rawOld = typeof oldMessage?.content === 'string' ? oldMessage.content : ''
+            const rawNew = typeof newMessage?.content === 'string' ? newMessage.content : ''
+            if (rawOld === rawNew) return
+
             function neutralizeCodeFences(s) {
-                if (typeof s !== 'string') return ''
-
-                // Break any run of 3+ backticks so it cannot form a code fence
-                return s.replace(/`{3,}/g, m => m.slice(0, 2) + '\u200b' + m.slice(2))
-            }
-
-            const MAX = 2000
-
-            function safeSlice(s, max) {
-                if (typeof s !== 'string') s = String(s || '')
-                if (s.length <= max) return s
-                return s.slice(0, Math.max(0, max - 14)) + '\n…(truncated)'
+            if (typeof s !== 'string') return ''
+            // break any run of 3+ backticks so it cannot form a code fence
+            return s.replace(/`{3,}/g, m => m.slice(0, 2) + '\u200b' + m.slice(2))
             }
 
             function wrapCodeBlock(content) {
-                content = typeof content === 'string' ? content : String(content || '')
-                return `\`\`\`\n${content}\n\`\`\``
+            content = typeof content === 'string' ? content : String(content || '')
+            return `\`\`\`\n${content}\n\`\`\``
             }
 
-            let oldContent = neutralizeCodeFences(typeof oldMessage?.content === 'string' ? oldMessage.content : '')
-            let newContent = neutralizeCodeFences(typeof newMessage.content === 'string' ? newMessage.content : '')
+            const DESC_LIMIT = 3900 // safe headroom under 4096
+
+            function chunkText(s, limit) {
+            s = typeof s === 'string' ? s : String(s || '')
+            if (!s) return ['']
+
+            const out = []
+            let i = 0
+            while (i < s.length) {
+                out.push(s.slice(i, i + limit))
+                i += limit
+            }
+            return out
+            }
+
+            function buildEmbedsFromChunks(title, headerLine, contentStr, footerLine) {
+            const embeds = []
+
+            const header = headerLine ? headerLine + '\n' : ''
+            const footer = footerLine ? '\n' + footerLine : ''
+
+            const bodyChunks = chunkText(contentStr, 3000) 
+
+            for (let idx = 0; idx < bodyChunks.length; idx++) {
+                const isLast = idx === bodyChunks.length - 1
+
+                const desc =
+                header +
+                wrapCodeBlock(bodyChunks[idx]) +
+                (isLast ? footer : '')
+
+                
+                if (desc.length > DESC_LIMIT) {
+                let chunk = bodyChunks[idx]
+                while (chunk.length > 0) {
+                    const trial =
+                    header +
+                    wrapCodeBlock(chunk) +
+                    (isLast ? footer : '')
+                    if (trial.length <= DESC_LIMIT) {
+                    embeds.push(
+                        new Discord.EmbedBuilder()
+                        .setTitle(idx === 0 ? title : `${title} (cont. ${idx + 1})`)
+                        .setDescription(trial)
+                    )
+                    break
+                    }
+                    chunk = chunk.slice(0, chunk.length - 100)
+                }
+                continue
+                }
+
+                embeds.push(
+                new Discord.EmbedBuilder()
+                    .setTitle(idx === 0 ? title : `${title} (cont. ${idx + 1})`)
+                    .setDescription(desc)
+                )
+            }
+
+            return embeds
+            }
+
+            let oldContent = neutralizeCodeFences(
+            typeof oldMessage?.content === 'string' ? oldMessage.content : ''
+            )
+            let newContent = neutralizeCodeFences(
+            typeof newMessage?.content === 'string' ? newMessage.content : ''
+            )
 
             if (!newContent) newContent = 'No new content.'
+            if (!oldMessage || oldMessage.partial || !oldContent) oldContent = 'Bot: Cache Unvailable'
 
-            if (!oldContent || oldContent === newContent) {
-                oldContent = 'Bot: Cache Unvailable'
+            const header = `Message updated by user: ${newMessage.author}`
+            const footer = `Message Link: ${newMessage.url}`
+
+            const oldEmbeds = buildEmbedsFromChunks('Message Updated 📝', header + '\nOld Message', oldContent, '')
+            const newEmbeds = buildEmbedsFromChunks('Message Updated 📝', 'New Message', newContent, footer)
+
+            // Send them in order
+            for (const e of oldEmbeds) {
+            botLog(bot, e, 3, 'messages')
             }
-
-            if (oldContent.length >= MAX) {
-                const oldSafe = safeSlice(oldContent, MAX)
-                const newSafe = safeSlice(newContent, MAX)
-
-                botLog(
-                bot,
-                new Discord.EmbedBuilder()
-                    .setTitle('Original Message 📝')
-                    .setDescription(
-                    `Message updated by user: ${newMessage.author}\n` +
-                    wrapCodeBlock(oldSafe)
-                    ),
-                3,
-                'messages'
-                )
-
-                botLog(
-                bot,
-                new Discord.EmbedBuilder()
-                    .setTitle('Updated Message 📝')
-                    .setDescription(
-                    wrapCodeBlock(newSafe) + `\nMessage Link: ${newMessage.url}`
-                    ),
-                3,
-                'messages'
-                )
-            } else {
-                const oldSafe = safeSlice(oldContent, MAX)
-                const newSafe = safeSlice(newContent, MAX)
-
-                botLog(
-                bot,
-                new Discord.EmbedBuilder()
-                    .setTitle('Message Updated 📝')
-                    .setDescription(
-                    `Message updated by user: ${newMessage.author}\n` +
-                    `Old Message\n` + wrapCodeBlock(oldSafe) + `\n` +
-                    `New Message\n` + wrapCodeBlock(newSafe) + `\n` +
-                    `Message Link: ${newMessage.url}`
-                    ),
-                3,
-                'messages'
-                )
+            for (const e of newEmbeds) {
+            botLog(bot, e, 3, 'messages')
             }
         } 
         catch (err) {
-        botLog(
+            botLog(
             bot,
             new Discord.EmbedBuilder()
-            .setTitle('⛔ Error Handling messageUpdate() in simpleEvents.js')
-            .setDescription('```' + (err?.stack || String(err)) + '```'),
+                .setTitle('⛔ Error Handling messageUpdate() in simpleEvents.js')
+                .setDescription('```' + (err?.stack || String(err)) + '```'),
             2,
             'error'
-        )
+            )
         }
-
     },
     guildMemberRemove: async (member, bot) => { 
         let roles = ``
