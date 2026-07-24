@@ -100,34 +100,15 @@ function mainOperation(){
 	require("dotenv").config({ path: `${botFunc.botIdent().activeBot.env}` });
 
 	// Discord client setup
-	const serverIntents = new Discord.IntentsBitField([
-		Discord.GatewayIntentBits.Guilds,
-		Discord.GatewayIntentBits.GuildMembers,
-		Discord.GatewayIntentBits.GuildModeration,
-		Discord.GatewayIntentBits.GuildExpressions,
-		Discord.GatewayIntentBits.GuildIntegrations,
-		Discord.GatewayIntentBits.GuildWebhooks,
-		Discord.GatewayIntentBits.GuildInvites,
-		Discord.GatewayIntentBits.GuildVoiceStates,
-		Discord.GatewayIntentBits.GuildMessages,
-		Discord.GatewayIntentBits.GuildMessageReactions,
-		Discord.GatewayIntentBits.GuildMessageTyping,
-		Discord.GatewayIntentBits.DirectMessages,
-		Discord.GatewayIntentBits.DirectMessageReactions,
-		Discord.GatewayIntentBits.DirectMessageTyping,
-		Discord.GatewayIntentBits.MessageContent,
-		Discord.GatewayIntentBits.GuildScheduledEvents,
-		Discord.GatewayIntentBits.AutoModerationConfiguration,
-		Discord.GatewayIntentBits.AutoModerationExecution,
-	])
-	const bot = new Discord.Client({
-		intents: serverIntents,
+	const serverIntents = new Discord.IntentsBitField(3276799)
+	const bot = new Discord.Client({ 
+		intents: serverIntents, 
 		partials: [
-			Discord.Partials.User,
-			Discord.Partials.Message,
-			Discord.Partials.Channel,
+			Discord.Partials.User, 
+			Discord.Partials.Message, 
+			Discord.Partials.Channel, 
 			Discord.Partials.Reaction
-		]
+		] 
 	})
 	/**
 	 * Loads command objects from the commands folder
