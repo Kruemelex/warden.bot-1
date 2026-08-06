@@ -202,7 +202,7 @@ const exp = {
             }
         }
     },
-    guildMemberAdd: async (interaction, bot) => {
+    guildMemberAdd: async (member, bot) => {
         if (process.env.MODE == 'testServer') {
              // The role IDs or names you want to assign
             const rolesToAssign = ['test person', 'Learner']; // Replace with the actual role IDs or names
@@ -1081,10 +1081,11 @@ const exp = {
         let roles = ``
         member.roles.cache.each(role => roles += `${role}\n`)
         botLog(bot,new Discord.EmbedBuilder()
-        .setDescription(`User ${member.user.tag}(${member.displayName}) has left or was kicked from the server.`)
+        .setDescription(`User ${member.user.tag} (${member.displayName}) has left or was kicked from the server.`)
         .setTitle(`User Left/Kicked from Server`)
         .addFields(
-            { name: `ID`, value: `${member.id}`},
+            { name: `User`, value: `${member.user}` },
+            { name: `ID`, value: `\`\`\`${member.id}\`\`\``},
             { name: `Date Joined`, value: `<t:${(member.joinedTimestamp/1000) >> 0}:F>`},
             { name: `Roles`, value: `${roles}`},
         ),2)

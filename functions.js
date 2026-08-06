@@ -190,7 +190,11 @@ const thisBotFunctions = {
                             if (event && typeof event === 'object') {
                                 for (const key in event) {
                                     if (typeof event[key] === 'function') {
-                                        client.on(key, (...args) => event[key](...args, client));
+                                        client.on(key, (...args) => {
+                                            Promise.resolve().then(() => event[key](...args, client)).catch((error) => {
+                                                console.error(`Unhandled ${key} event failure from ${filePath}:`, error);
+                                            });
+                                        });
                                     }
                                 }
                             }
@@ -420,7 +424,7 @@ const thisBotFunctions = {
             ,'error'
         )
     },
-    botLog: async (bot,embed,severity,logType) => {
+    botLog: async (bot,embed,severity,logType,deliveryOptions = {}) => {
         /**
          * botLog(
                 @param *guild object required
@@ -491,11 +495,25 @@ const thisBotFunctions = {
             .setTimestamp()
             .setFooter({ text: `${thisBotFunctions.botIdent().activeBot.botName}  Logs`, iconURL: thisBotFunctions.botIdent().activeBot.icon });
 		if (logFeature) {
-            await bot.channels.cache.get(logFeature).send({ embeds: [embed], })
-        }
-        else {
-            console.error(`ERROR: ${logTranslate} botTypes configuration for channels NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
-        }
+            const channel = bot.channels.cache.get(logFeature)
+            if (channel) {
+                if (typeof deliveryOptions.beforeDispatch === 'function') {
+                    await deliveryOptions.beforeDispatch()
+                }
+                return channel.send({
+                    embeds: [embed],
+                    ...(deliveryOptions.nonce ? { nonce: deliveryOptions.nonce } : {}),
+                    ...(deliveryOptions.enforceNonce === true ? { enforceNonce: true } : {}),
+                }).catch((error) => {
+                    error.deliveryMayHaveSucceeded = true
+                    throw error
+                })
+            }
+		}
+		const error = new Error(`ERROR: ${logTranslate} botTypes configuration for channels NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
+        error.code = 'WARDEN_BOTLOG_CHANNEL_UNAVAILABLE'
+        if (deliveryOptions.requireDelivery === true) throw error
+        console.error(error.message)
 	},
     getSortedRoleIDs: (message) => {
         /**

@@ -1,21 +1,47 @@
 const { botLog, botIdent } = require('../functions')
-const { leaderboardInteraction } = require('../commands/Warden/leaderboards/leaderboard_staffApproval')
 const { cleanup, AXIchallengeProof, nextTestQuestion, nextGradingQuestion, showPromotionChallenge, promotionChallengeResult } = require('../commands/GuardianAI/promotionRequest/requestpromotion')
 const { saveBulkMessages, removeBulkMessages } = require('../commands/GuardianAI/promotionRequest/prFunctions')
 const database = require(`../${botIdent().activeBot.botName}/db/database`)
 const config = require('../config.json')
 
 const Discord = require('discord.js')
-const fs = require('fs')
-const path = require('path')
-// const { default: test } = require('node:test')
+const { sendInitialInteractionResponse } = require('../Warden/ux/interactions/acknowledgement')
+// const { default: test }
+
+const DISCORD_INITIAL_RESPONSE_WINDOW_MS = 3_000
+const isWarden = botIdent().activeBot.botName === 'Warden'
+
+const handleLeaderboardInteraction = isWarden
+    ? require('../commands/Warden/leaderboards/staffApproval/controller').handleLeaderboardInteraction
+    : undefined
+const handleVerificationFeatureInteraction = isWarden
+    ? require('../Warden/verification').handleInteraction
+    : undefined
+const noteVerificationForegroundActivity = isWarden
+    ? require('../Warden/verification/runtime/screen-work-limiter').noteVerificationForegroundActivity
+    : undefined
+
 let args = {}
+
 function postArgs(interaction) {
     for (let key of interaction.options.data) {
         args[key.name] = key.value
     }
     return args
 }
+
+async function sendCommandErrorResponse(interaction, content) {
+    try {
+        await sendInitialInteractionResponse(interaction, {
+            content,
+            flags: Discord.MessageFlags.Ephemeral,
+        });
+    }
+    catch (responseError) {
+        console.error('Failed to send command error response:', responseError);
+    }
+}
+
 async function activeDutyModal(i) {
     const fields = {
         title: new Discord.TextInputBuilder()
@@ -90,8 +116,42 @@ async function opordInterestedModal(i) {
 
     }
 }
+
+function describeInteraction(interaction) {
+    if (interaction.isChatInputCommand?.() || interaction.isCommand?.()) return `command /${interaction.commandName}`;
+    if (interaction.isAutocomplete?.()) return `autocomplete /${interaction.commandName}`;
+    if (interaction.isButton?.()) return 'button';
+    if (interaction.isModalSubmit?.()) return 'modal';
+    if (interaction.isAnySelectMenu?.()) return 'select menu';
+    return 'interaction';
+}
+
 const exp = {
     interactionCreate: async (interaction,bot) => {
+        noteVerificationForegroundActivity?.(describeInteraction(interaction))
+        const interactionCreatedAt = Number(interaction.createdTimestamp)
+            || interaction.createdAt?.getTime?.()
+            || Date.now()
+        const interactionAgeMs = Math.max(0, Date.now() - interactionCreatedAt)
+        const initialResponseExpired = isWarden
+            && !interaction.deferred
+            && !interaction.replied
+            && interactionAgeMs >= DISCORD_INITIAL_RESPONSE_WINDOW_MS
+        if (interactionAgeMs >= 750) {
+            const diagnostic = setImmediate(() => {
+                const state = initialResponseExpired ? 'Expired ingress' : 'Slow ingress'
+                console.warn(`[INTERACTION] ${state}: ${describeInteraction(interaction)} received `
+                    + `${interactionAgeMs}ms after creation.`)
+            })
+            diagnostic.unref?.()
+        }
+        if (initialResponseExpired) return
+        if (
+            handleLeaderboardInteraction
+            && await handleLeaderboardInteraction(interaction)
+        ) return
+        if (handleVerificationFeatureInteraction && await handleVerificationFeatureInteraction(interaction)) return
+
         if (interaction.isModalSubmit()) {
             if (botIdent().activeBot.botName == 'GuardianAI') {
                 if (interaction.customId.startsWith("interestedOpord")) {
@@ -182,9 +242,10 @@ const exp = {
             }
         }
         if (interaction.isAutocomplete()) {
-            const command = interaction.client.commands.get(interaction.commandName)
+            const command = interaction.client.commands?.get(interaction.commandName)
+                ?? bot.commands?.get(interaction.commandName);
 
-            if (!command) return console.log('Command not found')
+            if (!command) return console.log('Command not found');
             if (!command.autocomplete) {
                 return console.error(`No autocomplete handler was found for the ${interaction.commandName} command.`,
                 );
@@ -208,10 +269,14 @@ const exp = {
                 opordInterestedModal(interaction)
             }
             try {
-                await command.execute(interaction)
-            } catch (error) {
+                await command.execute(interaction);
+            }
+            catch (error) {
                 console.error(error);
-                await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+                await sendCommandErrorResponse(
+                    interaction,
+                    'There was an error while executing this command!',
+                );
             }
         }
         if (interaction.isButton()) {
@@ -220,13 +285,6 @@ const exp = {
             // if (botIdent().activeBot.botName != 'GuardianAI') {
             //     botLog(bot,new Discord.EmbedBuilder().setDescription(`Button triggered by user **${interaction.user.tag}** - Button ID: ${interaction.customId}`),0);
             // }
-            if (botIdent().activeBot.botName == 'Warden') {
-                if (interaction.customId.startsWith("submission")) {
-                    interaction.deferUpdate()
-                    leaderboardInteraction(interaction)
-                    return;
-                }
-            }
             if (botIdent().activeBot.botName == 'GuardianAI') {
                 const rankTypes = {
                     "basic": "Aviator",
