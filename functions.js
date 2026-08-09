@@ -3,6 +3,7 @@ const fs = require("fs")
 const path = require("path")
 const glob = require('glob')
 const Discord = require('discord.js')
+let botLogDestinationResolver
 //This functions.js file serves as a global functions context for all bots that may reuse the same code.
 /**
  * @author (testfax) Medi0cr3 @testfax
@@ -10,6 +11,12 @@ const Discord = require('discord.js')
  */
 
 const thisBotFunctions = { 
+    registerBotLogDestinationResolver: function(resolver) {
+        if (resolver !== undefined && typeof resolver !== 'function') {
+            throw new TypeError('Bot-log destination resolver must be a function.');
+        }
+        botLogDestinationResolver = resolver
+    },
     adjustActive: function(current,mode) {
         try {
             function getFile(current) {
@@ -466,6 +473,7 @@ const thisBotFunctions = {
 // .setColor('#f2ff00') //bight yellow
         let logFeature
         let logTranslate
+        let logDestinationDisabled = false
         switch (logType) {
             case "messages":
 				logFeature = thisBotFunctions.botIdent().activeBot.messagesChannel
@@ -491,6 +499,17 @@ const thisBotFunctions = {
                 logFeature = thisBotFunctions.botIdent().activeBot.logsChannel
                 logTranslate = 'LOGCHANNEL'
 		}
+		if (botLogDestinationResolver) {
+            const resolvedLogFeature = botLogDestinationResolver({
+                fallbackChannelId: logFeature,
+                guildId: bot?.id ?? bot?.guild?.id ?? bot?.guilds?.cache?.first?.()?.id,
+                logType: logType ?? 'info',
+            })
+            if (resolvedLogFeature !== undefined) {
+                logFeature = resolvedLogFeature
+                logDestinationDisabled = resolvedLogFeature === null
+            }
+        }
 		embed.setColor(logColor)
             .setTimestamp()
             .setFooter({ text: `${thisBotFunctions.botIdent().activeBot.botName}  Logs`, iconURL: thisBotFunctions.botIdent().activeBot.icon });
@@ -512,6 +531,10 @@ const thisBotFunctions = {
 		}
 		const error = new Error(`ERROR: ${logTranslate} botTypes configuration for channels NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
         error.code = 'WARDEN_BOTLOG_CHANNEL_UNAVAILABLE'
+        if (logDestinationDisabled) {
+            if (deliveryOptions.requireDelivery === true) throw error
+            return undefined
+        }
         if (deliveryOptions.requireDelivery === true) throw error
         console.error(error.message)
 	},

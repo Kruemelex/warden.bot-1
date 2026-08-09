@@ -7,6 +7,7 @@ const {
 	isTransientDatabaseError,
 	retryTransientDatabaseOperation,
 } = require('../../../Warden/db/errorPolicy')
+const { getLeaderboardApprovalChannelId } = require('../../../Warden/logging/service')
 
 async function queryWithRetry(sql, values) {
 	const result = await retryTransientDatabaseOperation(() => database.query(sql, values))
@@ -72,7 +73,7 @@ module.exports = {
 		let args = {}
 		let user = interaction.member.id
 		let timestamp = Date.now()
-		let staffChannel = process.env.STAFFCHANNELID
+		let staffChannel = getLeaderboardApprovalChannelId(interaction.guildId)
 		let submissionId = null
 		let insertAttempted = false
 
@@ -85,7 +86,7 @@ module.exports = {
 		if (args.user !== undefined) { user = args.user }
 		if (args.comments == undefined) { args.comments = '-' }
 		let name
-		if(interaction.guild.channels.cache.get(staffChannel) === undefined)  { // Check for staff channel
+		if(!staffChannel || interaction.guild.channels.cache.get(staffChannel) === undefined)  { // Check for staff channel
 			return interaction.editReply({ content: `Staff Channel not found` })
 		}
 		// const timewithmilliseconds = Number(`${args.time}` + `${args.milliseconds}`)

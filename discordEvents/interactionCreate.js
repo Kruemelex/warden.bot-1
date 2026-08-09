@@ -17,8 +17,11 @@ const handleLeaderboardInteraction = isWarden
 const handleVerificationFeatureInteraction = isWarden
     ? require('../Warden/verification').handleInteraction
     : undefined
-const noteVerificationForegroundActivity = isWarden
-    ? require('../Warden/verification/runtime/screen-work-limiter').noteVerificationForegroundActivity
+const handleWardenLoggingInteraction = isWarden
+    ? require('../Warden/logging').handleInteraction
+    : undefined
+const noteWardenForegroundActivity = isWarden
+    ? require('../Warden/runtime/workload-coordinator').noteWardenForegroundActivity
     : undefined
 
 let args = {}
@@ -128,7 +131,7 @@ function describeInteraction(interaction) {
 
 const exp = {
     interactionCreate: async (interaction,bot) => {
-        noteVerificationForegroundActivity?.(describeInteraction(interaction))
+        noteWardenForegroundActivity?.(describeInteraction(interaction))
         const interactionCreatedAt = Number(interaction.createdTimestamp)
             || interaction.createdAt?.getTime?.()
             || Date.now()
@@ -150,6 +153,7 @@ const exp = {
             handleLeaderboardInteraction
             && await handleLeaderboardInteraction(interaction)
         ) return
+        if (handleWardenLoggingInteraction && await handleWardenLoggingInteraction(interaction)) return
         if (handleVerificationFeatureInteraction && await handleVerificationFeatureInteraction(interaction)) return
 
         if (interaction.isModalSubmit()) {

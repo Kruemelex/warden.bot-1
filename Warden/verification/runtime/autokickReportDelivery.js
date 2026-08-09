@@ -85,7 +85,7 @@ async function deliverAutokickReport({
             guild,
             buildAutokickReportEmbed(entry),
             1,
-            'info',
+            'users',
             {
                 nonce,
                 enforceNonce: true,

@@ -26,11 +26,14 @@ const {
 const { createVerificationAssetStockStore } = require('./asset-stock-store');
 const { getBoundedEnvironmentInteger } = require('./environment');
 const { createVerificationLogger } = require('../logging');
+const {
+    MIB,
+    hasWardenMemoryHeadroom,
+} = require('../../runtime/memory-admission');
 
 const assetStockLog = createVerificationLogger('Asset stock');
 
 const STOCK_SIGNATURE_VERSION = 2;
-const STOCK_FOREGROUND_QUIET_MS = 60_000;
 const STOCK_INTER_ENTRY_GRACE_MS = 250;
 const STOCK_RECHECK_MS = 15_000;
 const STOCK_FAILURE_BACKOFF_MAX_MS = 10 * 60_000;
@@ -40,6 +43,7 @@ const STOCK_HARD_MAX_MIB = 96;
 const STOCK_DEFAULT_MAX_ENTRIES_PER_SIGNATURE = 18;
 const STOCK_DEFAULT_REFILL_AT_ENTRIES = 12;
 const STOCK_MAX_RSS_BYTES = 256 * 1024 * 1024;
+const STOCK_MIN_CONTAINER_HEADROOM_BYTES = 256 * MIB;
 
 function formatMiB(bytes) {
     return (Number(bytes ?? 0) / 1024 / 1024).toFixed(1);
@@ -745,12 +749,16 @@ function canRunBackgroundStock() {
     const attachmentStats = getVerificationAttachmentDeliveryStats();
     return screenStats.active === 0
         && screenStats.queued === 0
+        && Number(screenStats.maintenanceActive ?? 0) === 0
+        && Number(screenStats.maintenanceQueued ?? 0) === 0
+        && Number(screenStats.speculativeDelayMs ?? 0) <= 0
         && Number(screenStats.stockSuspendedMs ?? 0) <= 0
-        && screenStats.foregroundIdleMs >= STOCK_FOREGROUND_QUIET_MS
         && renderStats.active === 0
         && attachmentStats.active === 0
         && attachmentStats.queued === 0
-        && process.memoryUsage().rss < STOCK_MAX_RSS_BYTES;
+        && hasWardenMemoryHeadroom(STOCK_MIN_CONTAINER_HEADROOM_BYTES, {
+            fallbackMaxRssBytes: STOCK_MAX_RSS_BYTES,
+        });
 }
 
 function yieldStockSessionTurn(signal) {
@@ -788,6 +796,7 @@ function reportStockFillSession(session, status, interruptedBy) {
 }
 
 async function runStockFillSession() {
+    if (!canRunBackgroundStock()) return { status: 'waiting' };
     await recoverPersistedStock();
     reconcileRefillSignatures();
     await cleanupRetiredEntries();
@@ -804,6 +813,7 @@ async function runStockFillSession() {
     const interrupted = (error) => ({
         status: shuttingDown ? 'shutdown' : 'interrupted',
         interruptedBy: error.interruptedBy ?? 'foreground work',
+        delayMs: STOCK_RECHECK_MS,
         session,
     });
     while (!shuttingDown && canRunBackgroundStock()) {

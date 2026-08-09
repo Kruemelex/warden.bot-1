@@ -161,28 +161,38 @@ function mainOperation(){
 		if (botFunc.botIdent().activeBot.botName == 'Warden') {
 			const database = await require(`./${botFunc.botIdent().activeBot.botName}/db/database`)
 			warden_vars = database
+			const wardenLogging = require('./Warden/logging')
+			const wardenVerification = require('./Warden/verification/startup')
+			for (const signal of ['SIGTERM', 'SIGINT']) {
+				process.once(signal, () => {
+					const botName = botFunc.botIdent().activeBot.botName
+					console.log("[SHUTDOWN]".yellow, `${botName}`.green, "Subsystems:".magenta, '🕗')
+					void Promise.allSettled([
+						wardenVerification.shutdownWardenVerification(),
+					]).then((results) => {
+						const failed = results.find((result) => result.status === 'rejected')
+						if (failed) {
+							console.error("[SHUTDOWN]".red, `${botName}`.green, "Subsystems:".magenta, '❌', failed.reason)
+							process.exit(1)
+						}
+						console.log("[SHUTDOWN]".yellow, `${botName}`.green, "Subsystems:".magenta, '✅')
+						process.exit(0)
+					})
+				})
+			}
 
 			try {
-				const {
-					initializeWardenVerification,
-					shutdownWardenVerification,
-				} = require('./Warden/verification/startup')
-				for (const signal of ['SIGTERM', 'SIGINT']) {
-					process.once(signal, () => {
-						const botName = botFunc.botIdent().activeBot.botName
-						console.log("[SHUTDOWN]".yellow, `${botName}`.green, "Verification:".magenta, '🕗')
-						void shutdownWardenVerification()
-							.then(() => {
-								console.log("[SHUTDOWN]".yellow, `${botName}`.green, "Verification:".magenta, '✅')
-								process.exit(0)
-							})
-							.catch((error) => {
-								console.error("[SHUTDOWN]".red, `${botName}`.green, "Verification:".magenta, '❌', error)
-								process.exit(1)
-							})
-					})
-				}
-				await initializeWardenVerification({
+				await wardenLogging.initializeWardenLogging({
+					guild,
+					guildId: process.env.GUILDID || guild?.id,
+				})
+				console.log("[STARTUP]".yellow, `${botFunc.botIdent().activeBot.botName}`.green, "Logging Settings:".magenta, '✅')
+			}
+			catch (err) {
+				console.error("[STARTUP]".red, `${botFunc.botIdent().activeBot.botName}`.green, "Logging Settings:".magenta, '❌', err)
+			}
+			try {
+				await wardenVerification.initializeWardenVerification({
 					guild,
 					guildId: process.env.GUILDID || guild?.id,
 					botName: botFunc.botIdent().activeBot.botName,
@@ -194,12 +204,15 @@ function mainOperation(){
 
 			if(process.env.MODE == "PROD") {
 				const { buildApprovalMessage } = require('./commands/Warden/leaderboards/leaderboardApprovalMessages')
+				const { getLeaderboardApprovalChannelId } = require('./Warden/logging/service')
 				const leaderboards = ['speedrun', 'ace']
 				const intervalTime = 3500
 
 				for (const leaderboard of leaderboards) {
 					try {
-						const staffChannel = await guild.channels.fetch(process.env.STAFFCHANNELID)
+						const staffChannelId = getLeaderboardApprovalChannelId(guild.id)
+						if (!staffChannelId) continue
+						const staffChannel = await guild.channels.fetch(staffChannelId)
 						const pendingSubmissions = await database.query(
 							`SELECT * FROM ${leaderboard} WHERE approval = (?)`,
 							[false]
@@ -241,12 +254,14 @@ function mainOperation(){
 							}
 							catch (err) {
 								console.log(err)
-								botFunc.botLog(guild,new Discord.EmbedBuilder()
-									.setDescription('```' + err.stack + '```')
-									.setTitle(`⛔ Fatal error experienced: reconcileLeaderboard(${leaderboard}, ${submission.id})`)
-									,2
-									,'error'
-								)
+								void Promise.resolve().then(() => botFunc.botLog(
+									guild,
+									new Discord.EmbedBuilder()
+										.setDescription('```' + err.stack + '```')
+										.setTitle(`⛔ Fatal error experienced: reconcileLeaderboard(${leaderboard}, ${submission.id})`),
+									2,
+									'error',
+								)).catch((logError) => console.error('Failed to log Leaderboard reconciliation error:', logError))
 							}
 
 							if (index < pendingSubmissions.length - 1) {
@@ -300,8 +315,8 @@ function mainOperation(){
 				// 		console.log(err);
 				// 	}
 				// }, the_interval);
+				}
 			}
-		}
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Bot has Loaded In:".magenta,'✅');
 	})
 	if (process.env.MODE != "PROD") {

@@ -12,6 +12,7 @@ const {
     isTransientDatabaseError,
     retryTransientDatabaseOperation,
 } = require('../../../Warden/db/errorPolicy')
+const { getLeaderboardApprovalChannelId } = require('../../../Warden/logging/service')
 
 async function queryWithRetry(sql, values) {
     const result = await retryTransientDatabaseOperation(() => database.query(sql, values))
@@ -239,7 +240,7 @@ module.exports = {
                 let userID = interaction.member.id
                 let name = interaction.member.displayName
                 let timestamp = Date.now()
-                let staffChannel = process.env.STAFFCHANNELID
+                let staffChannel = getLeaderboardApprovalChannelId(interaction.guildId)
                 let submissionId = null
                 let insertAttempted = false
         
@@ -250,7 +251,7 @@ module.exports = {
                 }
         
                 // Submit
-                if(interaction.guild.channels.cache.get(staffChannel) === undefined)  { // Check for staff channel
+                if(!staffChannel || interaction.guild.channels.cache.get(staffChannel) === undefined)  { // Check for staff channel
                     return interaction.editReply({ content: `Staff Channel not found` })
                 }
                 try {
@@ -345,12 +346,14 @@ module.exports = {
                 }
                 catch (err) {
                     console.log(err)
-                    botLog(interaction.guild,new Discord.EmbedBuilder()
-                        .setDescription('```' + err.stack + '```')
-                        .setTitle(`⛔ Ace submission failed`)
-                        ,2
-                        ,'error'
-                    )
+                    void Promise.resolve().then(() => botLog(
+                        interaction.guild,
+                        new Discord.EmbedBuilder()
+                            .setDescription('```' + err.stack + '```')
+                            .setTitle(`⛔ Ace submission failed`),
+                        2,
+                        'error',
+                    )).catch((logError) => console.error('Failed to log Ace submission error:', logError))
 
                     const content = submissionId
                         ? `⚠️ Submission #${submissionId} was recorded, but Warden could not finish posting all confirmation messages. Please do not resubmit it; contact Staff.`

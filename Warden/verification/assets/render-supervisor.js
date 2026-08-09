@@ -9,6 +9,7 @@ const {
     VERIFICATION_IMAGE_PROCESS_START_FAILED,
     createVerificationImageContractError,
     createVerificationImageProcessError,
+    createVerificationImageQueueError,
     createVerificationImageRenderError,
 } = require('./errors');
 const {
@@ -16,6 +17,11 @@ const {
     normalizeRenderResult,
 } = require('./render-contract');
 const { createVerificationLogger } = require('../logging');
+const {
+    MIB,
+    getWardenMemorySnapshot,
+    hasWardenMemoryHeadroom,
+} = require('../../runtime/memory-admission');
 
 const rendererLog = createVerificationLogger('Renderer');
 const PROCESS_FAILURE_BACKOFF_BASE_MS = 500;
@@ -25,6 +31,7 @@ const PROCESS_FAILURE_SEQUENCE_RESET_MS = 60_000;
 const PROCESS_EXIT_GRACE_MS = 2_000;
 const FOREGROUND_RENDER_CHILD_NICE = 10;
 const STOCK_RENDER_CHILD_NICE = 19;
+const RENDER_MIN_CONTAINER_HEADROOM_BYTES = 192 * MIB;
 const RENDER_CHILD_NODE_ARGS = Object.freeze([
     '--max-old-space-size=128',
     '--expose-gc',
@@ -114,6 +121,7 @@ function normalizeProcessResult(result = {}, job) {
 function createVerificationRenderSupervisor({
     processPath = path.join(__dirname, 'render-process.js'),
     forkProcess = fork,
+    hasMemoryHeadroom = hasWardenMemoryHeadroom,
 } = {}) {
     let active;
     let nextJobId = 1;
@@ -144,12 +152,20 @@ function createVerificationRenderSupervisor({
 
     function logResourceSnapshot(prefix) {
         const memory = process.memoryUsage();
+        const containerMemory = getWardenMemorySnapshot();
         const toMiB = (bytes) => Math.round(bytes / 1024 / 1024);
         rendererLog.warn(prefix, undefined, {
             activeProcesses: active ? 1 : 0,
             parentRssMiB: toMiB(memory.rss),
             externalMiB: toMiB(memory.external),
             arrayBuffersMiB: toMiB(memory.arrayBuffers),
+            containerUsageMiB: toMiB(containerMemory.usageBytes),
+            containerLimitMiB: Number.isFinite(containerMemory.limitBytes)
+                ? toMiB(containerMemory.limitBytes)
+                : undefined,
+            containerAvailableMiB: Number.isFinite(containerMemory.availableBytes)
+                ? toMiB(containerMemory.availableBytes)
+                : undefined,
         });
     }
 
@@ -455,6 +471,12 @@ function createVerificationRenderSupervisor({
         if (active) {
             return Promise.reject(createBusyError(
                 'Verification image rendering received overlapping work outside screen admission.',
+            ));
+        }
+        if (!hasMemoryHeadroom(RENDER_MIN_CONTAINER_HEADROOM_BYTES)) {
+            return Promise.reject(createVerificationImageQueueError(
+                'Verification image rendering is waiting for safe container memory capacity.',
+                VERIFICATION_IMAGE_OPERATION_BUSY,
             ));
         }
         const recoveryDelayMs = restartNotBefore - Date.now();

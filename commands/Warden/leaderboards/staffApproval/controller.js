@@ -408,9 +408,15 @@ async function handleApprovalAction(interaction, leaderboard, action, submission
     catch (error) {
         console.error('Leaderboard approval action failed:', error);
         if (error.code !== 'LEADERBOARD_POST_REFRESH_FAILED') {
-            botLog(interaction.guild, new Discord.EmbedBuilder()
-                .setDescription(`\`\`\`${error.stack}\`\`\``)
-                .setTitle('⛔ Leaderboard approval action failed'), 2, 'error');
+            void Promise.resolve().then(() => botLog(
+                interaction.guild,
+                new Discord.EmbedBuilder()
+                    .setDescription(`\`\`\`${error.stack}\`\`\``)
+                    .setTitle('⛔ Leaderboard approval action failed'),
+                2,
+                'error',
+            ))
+                .catch((logError) => console.error('Failed to log Leaderboard approval error:', logError));
         }
         await interaction.followUp({
             content: `⛔ ${error.message || 'The Leaderboard action failed. Please try again.'}`,

@@ -256,6 +256,50 @@ function getModalSelectedUser(interaction, customId) {
     return interaction.fields.getSelectedUsers(customId, true)?.first();
 }
 
+function buildModalChannelSelectField({
+    label,
+    description,
+    customId,
+    placeholder,
+    selectedChannelId,
+    channelTypes = [
+        Discord.ChannelType.GuildText,
+        Discord.ChannelType.GuildAnnouncement,
+        Discord.ChannelType.PublicThread,
+        Discord.ChannelType.PrivateThread,
+        Discord.ChannelType.AnnouncementThread,
+    ],
+    required = true,
+}) {
+    assertModalLabelSupport();
+    assertCustomId(customId, 'Channel select');
+    const select = new Discord.ChannelSelectMenuBuilder()
+        .setCustomId(customId)
+        .setPlaceholder(truncateSelectText(placeholder ?? 'Choose a channel...'))
+        .setMinValues(required ? 1 : 0)
+        .setMaxValues(1)
+        .setChannelTypes(...channelTypes);
+    select.setRequired?.(required);
+    if (selectedChannelId) select.setDefaultChannels(String(selectedChannelId));
+
+    const modalLabel = new Discord.LabelBuilder()
+        .setLabel(truncateModalLabel(label))
+        .setChannelSelectMenuComponent(select);
+    if (description) {
+        modalLabel.setDescription(
+            String(description).slice(0, DISCORD_ADMIN_UI_LIMITS.textInputPlaceholderLength),
+        );
+    }
+    return modalLabel;
+}
+
+function getModalSelectedChannel(interaction, customId) {
+    if (typeof interaction.fields?.getSelectedChannels !== 'function') {
+        throw new Error('This discord.js version cannot read modal channel selections.');
+    }
+    return interaction.fields.getSelectedChannels(customId, true)?.first();
+}
+
 function getAllowedOptionValues(options) {
     return new Set(options.map((option) => String(option.value)));
 }
@@ -287,12 +331,14 @@ function buildModal(customId, title, ...labels) {
 module.exports = {
     buildExistingTextField,
     buildModal,
+    buildModalChannelSelectField,
     buildModalRoleSelectField,
     buildModalStringSelectField,
     buildModalTextLabel,
     buildModalUserSelectField,
     buildStringSelectComponent,
     getAllowedOptionValues,
+    getModalSelectedChannel,
     getModalSelectedRole,
     getModalSelectedUser,
     getModalSelectValues,

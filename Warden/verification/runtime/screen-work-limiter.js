@@ -6,6 +6,11 @@ const {
 const { createPrioritySemaphore } = require('./priority-semaphore');
 const { getBoundedEnvironmentInteger } = require('./environment');
 const { createVerificationLogger } = require('../logging');
+const {
+    createWardenWorkloadCoordinator,
+    wardenWorkloadCoordinator,
+} = require('../../runtime/workload-coordinator');
+const { getWardenMemorySnapshot } = require('../../runtime/memory-admission');
 
 const screenWorkLog = createVerificationLogger('Screen work');
 
@@ -23,7 +28,6 @@ const SCREEN_WORK_PRIORITIES = Object.freeze({
     stock: 'background',
 });
 const NEVER_ABORTED_SIGNAL = new AbortController().signal;
-
 function createScreenWorkError(message, code) {
     return createVerificationImageQueueError(message, code);
 }
@@ -52,6 +56,7 @@ function createVerificationScreenWorkLimiter({
         MAX_SCREEN_WORK_PENDING,
     ),
     monitorEventLoop = false,
+    workloadCoordinator = createWardenWorkloadCoordinator(),
 } = {}) {
     if (!Number.isInteger(maxPending) || maxPending < 1 || maxPending > MAX_SCREEN_WORK_PENDING) {
         throw new Error(
@@ -61,15 +66,12 @@ function createVerificationScreenWorkLimiter({
 
     const semaphore = createPrioritySemaphore({ capacity: 1, maxPending });
     let activeMeta;
-    let lastForegroundAt = Date.now();
     let latestEventLoopLagMs = 0;
     let stockSuspendedUntil = 0;
-    let stockPreemptions = 0;
-    const stockJobs = new Set();
-    let stockInterruptionController = new AbortController();
-
     function getStats() {
         const stats = semaphore.getStats();
+        const coordinatorStats = workloadCoordinator.getStats();
+        const workloadStats = coordinatorStats.byPriority;
         return Object.freeze({
             active: stats.active,
             activePriority: activeMeta?.priorityName,
@@ -77,10 +79,13 @@ function createVerificationScreenWorkLimiter({
             queued: stats.queued,
             concurrency: stats.capacity,
             queueLimit: stats.maxPending,
-            foregroundIdleMs: Math.max(0, Date.now() - lastForegroundAt),
+            foregroundIdleMs: coordinatorStats.foregroundIdleMs,
+            speculativeDelayMs: coordinatorStats.speculativeDelayMs,
             eventLoopLagMs: latestEventLoopLagMs,
             stockSuspendedMs: Math.max(0, stockSuspendedUntil - Date.now()),
-            stockPreemptions,
+            maintenanceActive: workloadStats.maintenance.active,
+            maintenanceQueued: workloadStats.maintenance.queued,
+            stockPreemptions: workloadStats.speculative.interrupted,
         });
     }
 
@@ -93,31 +98,27 @@ function createVerificationScreenWorkLimiter({
     }
 
     function abortStockJobs(message, interruptedBy) {
-        let activeStockAborted = false;
-        let queuedStockAborted = 0;
-        const interruption = createStockAbortError(message, interruptedBy);
-        stockInterruptionController.abort(interruption);
-        stockInterruptionController = new AbortController();
-        for (const job of stockJobs) {
-            if (job.signal?.aborted || job.controller.signal.aborted) continue;
-            job.controller.abort(interruption);
-            if (job.started) activeStockAborted = true;
-            else queuedStockAborted += 1;
-        }
-        stockPreemptions += Number(activeStockAborted) + queuedStockAborted;
-        return Object.freeze({ activeStockAborted, queuedStockAborted });
+        const result = workloadCoordinator.interruptLowerPriority(
+            'maintenance',
+            interruptedBy ?? message,
+        ).speculative ?? { active: 0, queued: 0 };
+        return Object.freeze({
+            activeStockAborted: result.active > 0,
+            queuedStockAborted: result.queued,
+        });
     }
 
     function getStockInterruptionSignal() {
-        return stockInterruptionController.signal;
+        return workloadCoordinator.getInterruptionSignal('speculative');
     }
 
     function noteForegroundActivity(interruptedBy = 'foreground work') {
-        lastForegroundAt = Date.now();
-        return abortStockJobs(
-            'Verification asset stock preparation yielded to foreground work.',
-            interruptedBy,
-        );
+        const result = workloadCoordinator.interruptLowerPriority('foreground', interruptedBy);
+        const stock = result.speculative ?? { active: 0, queued: 0 };
+        return Object.freeze({
+            activeStockAborted: stock.active > 0,
+            queuedStockAborted: stock.queued,
+        });
     }
 
     function suspendStockWork(reason, durationMs = STOCK_STALL_SUSPENSION_MS) {
@@ -156,32 +157,23 @@ function createVerificationScreenWorkLimiter({
             );
         }
 
-        const stockJob = priorityName === 'stock'
-            ? { controller: new AbortController(), started: false }
-            : undefined;
-        const operationSignal = stockJob
-            ? AbortSignal.any([
-                stockJob.controller.signal,
-                signal ?? NEVER_ABORTED_SIGNAL,
-            ])
-            : signal ?? NEVER_ABORTED_SIGNAL;
-        if (stockJob) {
-            stockJob.signal = operationSignal;
-            stockJobs.add(stockJob);
-        }
-
         try {
-            return await semaphore.run(async () => {
-                if (stockJob) stockJob.started = true;
+            const execute = (operationSignal, markActive) => semaphore.run(async () => {
+                markActive?.();
                 activeMeta = { label, priorityName };
                 const stallTimer = setTimeout(() => {
                     const memory = process.memoryUsage();
+                    const containerMemory = getWardenMemorySnapshot();
                     const toMiB = (bytes) => Math.round(bytes / 1024 / 1024);
                     screenWorkLog.warn('Active screen work exceeded its expected duration', undefined, {
                         label,
                         activeDurationMs: SCREEN_WORK_STALL_WARNING_MS,
                         parentRssMiB: toMiB(memory.rss),
                         externalMiB: toMiB(memory.external),
+                        containerUsageMiB: toMiB(containerMemory.usageBytes),
+                        containerLimitMiB: Number.isFinite(containerMemory.limitBytes)
+                            ? toMiB(containerMemory.limitBytes)
+                            : undefined,
                     });
                 }, SCREEN_WORK_STALL_WARNING_MS);
                 stallTimer.unref?.();
@@ -197,12 +189,22 @@ function createVerificationScreenWorkLimiter({
                 timeoutMs,
                 signal: operationSignal,
             });
+            if (priorityName === 'stock') {
+                return await workloadCoordinator.run(
+                    ({ signal: operationSignal, markActive }) => execute(operationSignal, markActive),
+                    { priority: 'speculative', label, signal },
+                );
+            }
+            return await execute(signal ?? NEVER_ABORTED_SIGNAL);
         }
         catch (error) {
+            if (priorityName === 'stock' && error?.code === 'WARDEN_WORKLOAD_INTERRUPTED') {
+                throw createStockAbortError(
+                    'Verification asset stock preparation yielded to higher-priority work.',
+                    error.interruptedBy,
+                );
+            }
             throw mapAdmissionError(error, { label, maxPending, timeoutMs });
-        }
-        finally {
-            if (stockJob) stockJobs.delete(stockJob);
         }
     }
 
@@ -213,7 +215,7 @@ function createVerificationScreenWorkLimiter({
             latestEventLoopLagMs = Math.max(0, now - expectedProbeAt);
             expectedProbeAt = now + EVENT_LOOP_PROBE_INTERVAL_MS;
             if (
-                stockJobs.size > 0
+                workloadCoordinator.getStats().byPriority.speculative.active > 0
                 && latestEventLoopLagMs >= EVENT_LOOP_STALL_THRESHOLD_MS
             ) {
                 suspendStockWork(
@@ -234,6 +236,7 @@ function createVerificationScreenWorkLimiter({
 
 const verificationScreenWorkLimiter = createVerificationScreenWorkLimiter({
     monitorEventLoop: true,
+    workloadCoordinator: wardenWorkloadCoordinator,
 });
 
 module.exports = {
