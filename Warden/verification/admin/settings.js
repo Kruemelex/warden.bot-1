@@ -1,6 +1,6 @@
 const Discord = require('discord.js');
-const { createDescriptorModalEditor } = require('../../ux/interactions/editor');
-const { acknowledgePanelInteraction } = require('../../ux/interactions/acknowledgement');
+const { createDescriptorModalEditor } = require('../../../ux/interactions/editor');
+const { acknowledgePanelInteraction } = require('../../../ux/interactions/acknowledgement');
 const {
     buildExistingTextField,
     buildModal: buildAdminModal,
@@ -11,7 +11,7 @@ const {
     getModalSelectValues,
     getModalTextInput,
     getRequiredModalSingleSelect,
-} = require('../../ux/components/modalFields');
+} = require('../../../ux/components/modalFields');
 const { VERIFICATION_UI_LIMITS } = require('../domain/limits');
 const { formatDuration } = require('../presentation/templates');
 const {

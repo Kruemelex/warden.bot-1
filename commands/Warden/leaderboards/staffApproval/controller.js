@@ -2,17 +2,17 @@
 
 const Discord = require('discord.js');
 const { botLog } = require('../../../../functions');
-const { buildModal } = require('../../../../Warden/ux/components/modalFields');
-const { createDescriptorModalEditor } = require('../../../../Warden/ux/interactions/editor');
+const { buildModal } = require('../../../../ux/components/modalFields');
+const { createDescriptorModalEditor } = require('../../../../ux/interactions/editor');
 const {
     acknowledgePanelInteraction,
     completePanelInteraction,
     respondAfterAcknowledgement,
     sanitizeMessageEditOptions,
-} = require('../../../../Warden/ux/interactions/acknowledgement');
-const { createInteractionRouter } = require('../../../../Warden/ux/interactions/router');
-const { createPanelSessionRegistry } = require('../../../../Warden/ux/interactions/sessions');
-const { renderComponentsV2 } = require('../../../../Warden/ux/renderers/componentsV2');
+} = require('../../../../ux/interactions/acknowledgement');
+const { createInteractionRouter } = require('../../../../ux/interactions/router');
+const { createPanelSessionRegistry } = require('../../../../ux/interactions/sessions');
+const { renderComponentsV2 } = require('../../../../ux/renderers/componentsV2');
 const { buildApprovalMessage } = require('../leaderboardApprovalMessages');
 const { createLeaderboardEditorDescriptors, validateAceScoreInputs } = require('./editor');
 const { createKeyedOperationQueue } = require('./keyedOperations');

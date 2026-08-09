@@ -1,10 +1,10 @@
 'use strict';
 
 const Discord = require('discord.js');
-const { createNoticeDocument } = require('../../../ux/documents');
-const { assertComponentsV2Support } = require('../../../ux/components/primitives');
-const { renderComponentsV2 } = require('../../../ux/renderers/componentsV2');
-const { renderLegacy } = require('../../../ux/renderers/legacy');
+const { createNoticeDocument } = require('../../../../ux/documents');
+const { assertComponentsV2Support } = require('../../../../ux/components/primitives');
+const { renderComponentsV2 } = require('../../../../ux/renderers/componentsV2');
+const { renderLegacy } = require('../../../../ux/renderers/legacy');
 const verificationEmbedConfig = require('../config.json');
 const {
     createVerificationTemplateDocument,

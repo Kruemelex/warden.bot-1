@@ -5,8 +5,8 @@ const {
     getModalSingleSelectValue,
     getModalTextInput,
     getRequiredModalSingleSelect,
-} = require('../../ux/components/modalFields');
-const { acknowledgePanelInteraction } = require('../../ux/interactions/acknowledgement');
+} = require('../../../ux/components/modalFields');
+const { acknowledgePanelInteraction } = require('../../../ux/interactions/acknowledgement');
 const {
     QUESTION_TASK_CONFIG_FIELDS,
     getNormalizedQuestionTaskType: getQuestionTaskType,

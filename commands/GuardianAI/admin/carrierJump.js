@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent, eventTimeCreate, hasSpecifiedRole,botLog } = require('../../../functions')
+const { botIdent, eventTimeCreate, hasSpecifiedRole, botLog, getIdentityBrandColor } = require('../../../functions')
 const objectives = require('../opords/opord_values.json')
 const config = require('../../../config.json')
 const database = require(`../../../${botIdent().activeBot.botName}/db/database`)
@@ -68,7 +68,7 @@ module.exports = {
                     .setTitle('[XSF] GuardianAI - Jump Complete')
                     // .setAuthor({ name: interaction.member.nickname, iconURL: interaction.user.displayAvatarURL({ dynamic: true }) })
                     .setThumbnail(botIdent().activeBot.icon)
-                    .setColor('#00ECFF') //87FF2A
+                    .setColor(getIdentityBrandColor())
                     .setDescription(`**Mission**\n${description}`)
                     .addFields({ name: "Carrier", value: carrier_name, inline: true })
                     .addFields({ name: "Ls from Star", value: `${lightSeconds} Ls`, inline: true })

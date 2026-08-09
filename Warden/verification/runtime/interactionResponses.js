@@ -7,7 +7,7 @@ const {
     respondAfterAcknowledgement,
     sanitizeMessageEditOptions,
     sendInitialInteractionResponse,
-} = require('../../ux/interactions/acknowledgement');
+} = require('../../../ux/interactions/acknowledgement');
 
 // Verification interaction responses remain a feature adapter because live flows
 // intentionally accept the historical `{ acknowledgement, followUp }` options

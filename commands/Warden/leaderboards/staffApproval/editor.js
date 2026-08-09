@@ -8,8 +8,8 @@ const {
     getModalSelectedUser,
     getModalTextInput,
     getRequiredModalSingleSelect,
-} = require('../../../../Warden/ux/components/modalFields');
-const { resolveOptimisticEdits } = require('../../../../Warden/ux/interactions/optimisticEdits');
+} = require('../../../../ux/components/modalFields');
+const { resolveOptimisticEdits } = require('../../../../ux/interactions/optimisticEdits');
 const {
     ACE_AMMO_TYPES,
     calculateAceScore,

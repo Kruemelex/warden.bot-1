@@ -922,7 +922,6 @@ const exp = {
         }
     },
     messageDelete: async (message) => {
-        const isWarden = botIdent().activeBot.botName === 'Warden'
         const authorId = message.author?.id
         try {
             let deletedBy = null
@@ -971,7 +970,7 @@ const exp = {
                 botLog(message.guild,
                     deletedEmbed,
                     1,
-                    isWarden ? 'messages' : undefined,
+                    'messages',
                 )
             }
         } catch (error) {
@@ -1025,15 +1024,15 @@ const exp = {
 
             // Send them in order
             for (const e of oldEmbeds) {
-            botLog(bot, e, 3, 'messages')
+            botLog(newMessage.guild, e, 3, 'messages')
             }
             for (const e of newEmbeds) {
-            botLog(bot, e, 3, 'messages')
+            botLog(newMessage.guild, e, 3, 'messages')
             }
         } 
         catch (err) {
             botLog(
-            bot,
+            newMessage?.guild ?? oldMessage?.guild ?? bot,
             new Discord.EmbedBuilder()
                 .setTitle('⛔ Error Handling messageUpdate() in simpleEvents.js')
                 .setDescription('```' + (err?.stack || String(err)) + '```'),
@@ -1045,7 +1044,7 @@ const exp = {
     guildMemberRemove: async (member, bot) => { 
         let roles = ``
         member.roles.cache.each(role => roles += `${role}\n`)
-        botLog(bot,new Discord.EmbedBuilder()
+        botLog(member.guild,new Discord.EmbedBuilder()
         .setDescription(`User ${member.user.tag} (${member.displayName}) has left or was kicked from the server.`)
         .setTitle(`User Left/Kicked from Server`)
         .addFields(
@@ -1070,9 +1069,8 @@ const exp = {
                 "Join Date:",joinDate,
                 "Account Age:",accountAge,
                 "OneDay:",oneDay)
-            const logType = botIdent().activeBot.botName === 'Warden' ? 'users' : 'staff'
             try {
-                await botLog(bot, new Discord.EmbedBuilder()
+                await botLog(member.guild, new Discord.EmbedBuilder()
                     .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
                     .setTitle(`New Account Joined Server`)
                     .addFields(
@@ -1081,12 +1079,12 @@ const exp = {
                         { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
                         { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
                         { name: `Roles`, value: roles || "No roles" },
-                    ), 2, logType
+                    ), 2, 'users'
                 )
             }
             catch (error) {
                 console.log(error)
-                await botLog(bot, new Discord.EmbedBuilder()
+                await botLog(member.guild, new Discord.EmbedBuilder()
                     .setDescription(`Couldn't post the new-account report.`)
                     .setTitle(`New account created within 24 hours and has joined the server.`),
                     2,

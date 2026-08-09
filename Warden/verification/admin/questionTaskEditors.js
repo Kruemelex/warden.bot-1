@@ -1,10 +1,10 @@
-const { createDescriptorModalEditor } = require('../../ux/interactions/editor');
+const { createDescriptorModalEditor } = require('../../../ux/interactions/editor');
 const {
     buildModal: buildAdminModal,
     buildModalStringSelectField,
     getModalSelectValues,
     getRequiredModalSingleSelect,
-} = require('../../ux/components/modalFields');
+} = require('../../../ux/components/modalFields');
 const {
     DEFAULT_ROTATION_ALIGNMENT_DEGREES,
     getDegreeList,

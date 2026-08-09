@@ -1,10 +1,10 @@
 const Discord = require('discord.js');
-const { createDescriptorModalEditor } = require('../../ux/interactions/editor');
+const { createDescriptorModalEditor } = require('../../../ux/interactions/editor');
 const {
     buildExistingTextField,
     buildModal: buildAdminModal,
     getModalTextInput,
-} = require('../../ux/components/modalFields');
+} = require('../../../ux/components/modalFields');
 const { VERIFICATION_UI_LIMITS } = require('../domain/limits');
 const { PROMPT_TEXT_MAX_LENGTH } = require('../domain/questionTasks/promptText');
 const { getQuestionTaskEditorCapabilities } = require('../domain/questionTasks/taskRegistry');

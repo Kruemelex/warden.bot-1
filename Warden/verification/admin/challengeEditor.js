@@ -4,14 +4,14 @@ const Discord = require('discord.js');
 const {
     acknowledgePanelInteraction,
     deferSourceUpdate,
-} = require('../../ux/interactions/acknowledgement');
+} = require('../../../ux/interactions/acknowledgement');
 const {
     buildExistingTextField,
     buildModal: buildAdminModal,
     buildModalTextLabel,
     buildStringSelectComponent,
     getModalTextInput,
-} = require('../../ux/components/modalFields');
+} = require('../../../ux/components/modalFields');
 const { VERIFICATION_UI_LIMITS } = require('../domain/limits');
 const {
     ACTIVE_CHALLENGE_EDIT_LOCK_MESSAGE,

@@ -1,16 +1,16 @@
 'use strict';
 
 const { createVerificationLogger } = require('../logging');
-const verificationPresentationConfig = require('../presentation/config.json');
-const { createAdminPanelDocument } = require('../../ux/documents');
-const { renderComponentsV2 } = require('../../ux/renderers/componentsV2');
-const { createPanelSessionRegistry } = require('../../ux/interactions/sessions');
-const { createPagination } = require('../../ux/interactions/pagination');
+const { getIdentityBrandColor } = require('../../../functions');
+const { createAdminPanelDocument } = require('../../../ux/documents');
+const { renderComponentsV2 } = require('../../../ux/renderers/componentsV2');
+const { createPanelSessionRegistry } = require('../../../ux/interactions/sessions');
+const { createPagination } = require('../../../ux/interactions/pagination');
 const {
     completePanelInteraction,
     deferSourceUpdate,
     sanitizeMessageEditOptions,
-} = require('../../ux/interactions/acknowledgement');
+} = require('../../../ux/interactions/acknowledgement');
 
 const ADMIN_PAGINATION_METADATA = 'verificationAdminPagination';
 const PANEL_PAYLOAD_METADATA = Symbol('verificationAdminPanel');
@@ -181,8 +181,7 @@ function buildVerificationAdminPanel({
             title: panel.title,
             description: panel.description,
             accentColor: panel.accentColor
-                ?? verificationPresentationConfig.responseDefaults?.colors?.info
-                ?? '#ff7100',
+                ?? getIdentityBrandColor('Warden'),
             fields: normalizeFields([
                 ...(panel.fields ?? []),
                 ...(panel.trailingFields ?? []),

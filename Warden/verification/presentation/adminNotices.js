@@ -1,7 +1,7 @@
 'use strict';
 
-const { createNoticeDocument } = require('../../ux/documents');
-const { renderComponentsV2 } = require('../../ux/renderers/componentsV2');
+const { createNoticeDocument } = require('../../../ux/documents');
+const { renderComponentsV2 } = require('../../../ux/renderers/componentsV2');
 const {
     createVerificationTemplateDocument,
     resolveEmbedColor,

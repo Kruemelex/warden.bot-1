@@ -1,7 +1,7 @@
 'use strict';
 
 const Discord = require('discord.js');
-const { buildModalTextLabel } = require('../../ux/components/modalFields');
+const { buildModalTextLabel } = require('../../../ux/components/modalFields');
 const { getScreenRequiredAnswerQuestions } = require('../domain/challenges');
 const { VERIFICATION_UI_LIMITS } = require('../domain/limits');
 const { getQuestionScreenPresentation } = require('../domain/screenPlan');

@@ -12,7 +12,7 @@ const {
     isTransientDatabaseError,
     retryTransientDatabaseOperation,
 } = require('../../../Warden/db/errorPolicy')
-const { getLeaderboardApprovalChannelId } = require('../../../Warden/logging/service')
+const { getLeaderboardApprovalChannelId } = require('../../../loggingSettings/service')
 
 async function queryWithRetry(sql, values) {
     const result = await retryTransientDatabaseOperation(() => database.query(sql, values))

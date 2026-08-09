@@ -5,7 +5,7 @@ const {
     optimisticEditsChanged,
     resolveOptimisticEdit,
     sameStringSet,
-} = require('../../ux/interactions/optimisticEdits');
+} = require('../../../ux/interactions/optimisticEdits');
 
 function parseAnswerOverrideList(input) {
     return String(input ?? '')

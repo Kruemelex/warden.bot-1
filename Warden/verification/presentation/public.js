@@ -1,6 +1,6 @@
 'use strict';
 
-const { renderLegacy } = require('../../ux/renderers/legacy');
+const { renderLegacy } = require('../../../ux/renderers/legacy');
 const {
     createVerificationTemplateNoticeDocument,
 } = require('./documents/notices');

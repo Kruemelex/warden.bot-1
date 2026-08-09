@@ -5,7 +5,7 @@ const {
 const {
     acknowledgePanelInteraction,
     deferSourceUpdate,
-} = require('../../ux/interactions/acknowledgement');
+} = require('../../../ux/interactions/acknowledgement');
 const {
     buildQuestionEditorPayload,
 } = require('./questionPanel');

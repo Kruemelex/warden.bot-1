@@ -1,6 +1,6 @@
 # Verification architecture
 
-This directory owns verification configuration, Admin UX, live and preview sessions, rendering, persistence, startup, and autokick behavior. Shared Discord presentation primitives live in `Warden/ux`; verification-specific policy stays here.
+This directory owns verification configuration, Admin UX, live and preview sessions, rendering, persistence, startup, and autokick behavior. Shared Discord presentation primitives live in the root `ux/` directory; verification-specific policy stays here.
 
 ## Entry points and flow
 
@@ -30,7 +30,7 @@ service.js -> data/verificationStore.js -> focused repositories
 - `domain/`: pure normalization, validation, task descriptors, answer rules, and screen planning. This layer must not depend on Discord interactions or database access.
 - `presentation/`: verification-specific documents, legacy embeds, Components v2 content, and answer modals.
 - `runtime/`: live/preview orchestration, bounded work admission, asset stock, lifecycle workers, post reconciliation, and autokick execution.
-- `Warden/ux/`: feature-neutral Discord documents, layouts, renderers, interactions, sessions, and attachment checks shared with other Warden features.
+- Root `ux/`: feature-neutral Discord documents, layouts, renderers, interactions, sessions, and attachment checks shared across bot identities and features.
 
 ## Boundaries
 

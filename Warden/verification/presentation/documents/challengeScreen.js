@@ -1,7 +1,7 @@
 'use strict';
 
 const Discord = require('discord.js');
-const { createChallengeScreenDocument } = require('../../../ux/documents');
+const { createChallengeScreenDocument } = require('../../../../ux/documents');
 const verificationEmbedConfig = require('../config.json');
 const {
     applyChallengeTextReplacements,

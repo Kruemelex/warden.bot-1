@@ -65,6 +65,7 @@ const Discord = require("discord.js")
 const { REST } = require('@discordjs/rest')
 const { Routes } = require('discord-api-types/v10')
 const botFunc = require('./functions.js')
+const { logConsoleStartupStatus } = require('./consoleReporting')
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path')
@@ -139,11 +140,26 @@ function mainOperation(){
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Login Process Completed:".magenta,`✅`)
 		await botFunc.deployCommands(commandsColl,REST,Routes,bot)
 		botFunc.botLog(bot,new Discord.EmbedBuilder().setDescription(`💡 ${bot.user.username} online! logged in as ${bot.user.tag}\n - Cache cleared`).setTitle(`${bot.user.username} Online`),0);
-		global.guild = bot.guilds.cache.first()
+		const configuredGuildId = process.env.GUILDID || botFunc.botIdent().activeBot.guildId
+		const guild = bot.guilds.cache.get(configuredGuildId) ?? bot.guilds.cache.first()
+		global.guild = guild
+		const activeBotName = botFunc.botIdent().activeBot.botName
+		const activeDatabase = require(`./${activeBotName}/db/database`)
+		const loggingSettings = require('./loggingSettings')
+		try {
+			await loggingSettings.initializeLoggingSettings({
+				guild,
+				guildId: configuredGuildId,
+			})
+			logConsoleStartupStatus(activeBotName, 'Logging Settings', '✅')
+		}
+		catch (err) {
+			logConsoleStartupStatus(activeBotName, 'Logging Settings', '❌', { failed: true })
+			console.error(err)
+		}
         
-		if (botFunc.botIdent().activeBot.botName == 'GuardianAI') {
-			const database = require(`./${botFunc.botIdent().activeBot.botName}/db/database`)
-			guardianai_vars = database
+		if (activeBotName == 'GuardianAI') {
+			guardianai_vars = activeDatabase
 			if (process.env.MODE == "PROD") {
 				//Assigns the ActivityType (status) of the bot with the system name.
 				carrierJumpRedisplay()
@@ -158,10 +174,9 @@ function mainOperation(){
 				}
 			}
 		} 
-		if (botFunc.botIdent().activeBot.botName == 'Warden') {
-			const database = await require(`./${botFunc.botIdent().activeBot.botName}/db/database`)
+		if (activeBotName == 'Warden') {
+			const database = activeDatabase
 			warden_vars = database
-			const wardenLogging = require('./Warden/logging')
 			const wardenVerification = require('./Warden/verification/startup')
 			for (const signal of ['SIGTERM', 'SIGINT']) {
 				process.once(signal, () => {
@@ -182,19 +197,9 @@ function mainOperation(){
 			}
 
 			try {
-				await wardenLogging.initializeWardenLogging({
-					guild,
-					guildId: process.env.GUILDID || guild?.id,
-				})
-				console.log("[STARTUP]".yellow, `${botFunc.botIdent().activeBot.botName}`.green, "Logging Settings:".magenta, '✅')
-			}
-			catch (err) {
-				console.error("[STARTUP]".red, `${botFunc.botIdent().activeBot.botName}`.green, "Logging Settings:".magenta, '❌', err)
-			}
-			try {
 				await wardenVerification.initializeWardenVerification({
 					guild,
-					guildId: process.env.GUILDID || guild?.id,
+					guildId: configuredGuildId,
 					botName: botFunc.botIdent().activeBot.botName,
 				})
 			}
@@ -204,7 +209,7 @@ function mainOperation(){
 
 			if(process.env.MODE == "PROD") {
 				const { buildApprovalMessage } = require('./commands/Warden/leaderboards/leaderboardApprovalMessages')
-				const { getLeaderboardApprovalChannelId } = require('./Warden/logging/service')
+				const { getLeaderboardApprovalChannelId } = require('./loggingSettings/service')
 				const leaderboards = ['speedrun', 'ace']
 				const intervalTime = 3500
 

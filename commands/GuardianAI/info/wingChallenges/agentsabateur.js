@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../../functions');
+const { botIdent, getIdentityBrandColor } = require('../../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`agentsaboteur`)
@@ -7,7 +7,7 @@ module.exports = {
     execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle(`Agent Sabotuer`)
-        .setColor('#FF7100')
+        .setColor(getIdentityBrandColor())
         .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
         .setThumbnail(botIdent().activeBot.icon)
         .setDescription(`Agent Saboteur Information`)

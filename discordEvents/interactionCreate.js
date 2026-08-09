@@ -5,7 +5,7 @@ const database = require(`../${botIdent().activeBot.botName}/db/database`)
 const config = require('../config.json')
 
 const Discord = require('discord.js')
-const { sendInitialInteractionResponse } = require('../Warden/ux/interactions/acknowledgement')
+const { sendInitialInteractionResponse } = require('../ux/interactions/acknowledgement')
 // const { default: test }
 
 const DISCORD_INITIAL_RESPONSE_WINDOW_MS = 3_000
@@ -17,9 +17,7 @@ const handleLeaderboardInteraction = isWarden
 const handleVerificationFeatureInteraction = isWarden
     ? require('../Warden/verification').handleInteraction
     : undefined
-const handleWardenLoggingInteraction = isWarden
-    ? require('../Warden/logging').handleInteraction
-    : undefined
+const handleLoggingSettingsInteraction = require('../loggingSettings').handleInteraction
 const noteWardenForegroundActivity = isWarden
     ? require('../Warden/runtime/workload-coordinator').noteWardenForegroundActivity
     : undefined
@@ -153,7 +151,7 @@ const exp = {
             handleLeaderboardInteraction
             && await handleLeaderboardInteraction(interaction)
         ) return
-        if (handleWardenLoggingInteraction && await handleWardenLoggingInteraction(interaction)) return
+        if (await handleLoggingSettingsInteraction(interaction)) return
         if (handleVerificationFeatureInteraction && await handleVerificationFeatureInteraction(interaction)) return
 
         if (interaction.isModalSubmit()) {

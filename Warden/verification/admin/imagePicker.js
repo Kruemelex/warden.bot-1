@@ -1,9 +1,9 @@
 const Discord = require('discord.js');
-const { deferSourceUpdate } = require('../../ux/interactions/acknowledgement');
+const { deferSourceUpdate } = require('../../../ux/interactions/acknowledgement');
 const {
     buildStringSelectComponent,
     truncateSelectText,
-} = require('../../ux/components/modalFields');
+} = require('../../../ux/components/modalFields');
 const { VERIFICATION_UI_LIMITS } = require('../domain/limits');
 const {
     ACTIVE_CHALLENGE_EDIT_LOCK_MESSAGE,

@@ -4,7 +4,7 @@ const Discord = require('discord.js');
 const {
     buildModalStringSelectField,
     truncateSelectText,
-} = require('../../ux/components/modalFields');
+} = require('../../../ux/components/modalFields');
 const {
     buildQuestionScreens,
     getChallengeQuestions,

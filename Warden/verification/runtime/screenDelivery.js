@@ -3,9 +3,9 @@ const {
     LEGACY_RENDERER,
     createVerificationChallengeScreenDocument,
 } = require('../presentation/documents/challengeScreen');
-const { renderComponentsV2 } = require('../../ux/renderers/componentsV2');
-const { renderLegacy } = require('../../ux/renderers/legacy');
-const { assertEmbedBudget } = require('../../ux/components/budget');
+const { renderComponentsV2 } = require('../../../ux/renderers/componentsV2');
+const { renderLegacy } = require('../../../ux/renderers/legacy');
+const { assertEmbedBudget } = require('../../../ux/components/budget');
 const {
     cloneSessionMessageHandles,
     replaceQuestionMessage,

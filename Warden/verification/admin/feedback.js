@@ -7,7 +7,7 @@ const {
 const { buildVerificationErrorEmbed } = require('../presentation/public');
 const {
     respondAfterAcknowledgement,
-} = require('../../ux/interactions/acknowledgement');
+} = require('../../../ux/interactions/acknowledgement');
 const { createVerificationLogger } = require('../logging');
 
 const adminUxLog = createVerificationLogger('Admin UX');

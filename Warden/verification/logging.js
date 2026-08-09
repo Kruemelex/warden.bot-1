@@ -3,7 +3,7 @@
 const {
     createConsoleReporter,
     logConsoleStartupStatus,
-} = require('../logging/consoleReporter');
+} = require('../../consoleReporting');
 
 const verificationReporter = createConsoleReporter('Verification');
 

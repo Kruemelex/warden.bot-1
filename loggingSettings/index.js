@@ -1,16 +1,16 @@
 'use strict';
 
-const { botIdent } = require('../../functions');
 const admin = require('./admin');
 const {
+    getProfile,
     initializeGuild,
     registerDestinationResolver,
 } = require('./service');
 
-async function initializeWardenLogging({ guild, guildId } = {}) {
-    if (botIdent().activeBot.botName !== 'Warden') return undefined;
+async function initializeLoggingSettings({ guild, guildId } = {}) {
+    const { botName } = getProfile();
     if (!guild || String(guild.id) !== String(guildId)) {
-        throw new Error('Warden logging startup requires the configured guild.');
+        throw new Error(`${botName} logging startup requires the configured guild.`);
     }
     const settings = await initializeGuild(guildId);
     registerDestinationResolver();
@@ -24,6 +24,7 @@ async function handleInteraction(interaction) {
 }
 
 module.exports = {
+    execute: admin.execute,
     handleInteraction,
-    initializeWardenLogging,
+    initializeLoggingSettings,
 };

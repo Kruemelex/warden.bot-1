@@ -19,6 +19,7 @@ const {
 const {
     assertConfiguredGuild,
     getCached,
+    getProfile,
     refreshGuild,
     registerDestinationResolver,
     updateGuild,
@@ -27,15 +28,15 @@ const {
 const CHANNEL_EDITORS = Object.freeze({
     general: {
         label: 'General Logs',
-        description: 'General Warden and info botlogs.',
+        description: 'General lifecycle and informational botlogs.',
     },
     error: {
         label: 'Error Logs',
-        description: 'Warden error botlogs.',
+        description: 'Execution and subsystem error botlogs.',
     },
     staff: {
         label: 'Staff Logs',
-        description: 'Warden staff-only logs.',
+        description: 'Staff-only operational botlogs.',
     },
     approvals: {
         label: 'Leaderboard Approvals',
@@ -51,15 +52,16 @@ const CHANNEL_EDITORS = Object.freeze({
     },
 });
 const sessions = createPanelSessionRegistry({
-    prefix: 'wLS',
-    label: 'Warden Logging Settings',
+    prefix: 'lS',
+    label: 'Logging Settings',
     maxEntries: 100,
 });
 
 function errorEmbed(message) {
+    const { botName } = getProfile();
     return new Discord.EmbedBuilder()
         .setColor('#f55142')
-        .setTitle('Warden Logging Settings')
+        .setTitle(`${botName} Logging Settings`)
         .setDescription(String(message || 'The logging settings action failed.'));
 }
 
@@ -95,28 +97,33 @@ function assertUsableDestination(interaction, channel, key) {
         const names = needsHistory
             ? 'View Channel, Read Message History, Send Messages, and Embed Links'
             : 'View Channel, Send Messages, and Embed Links';
-        throw new Error(`Warden needs ${names} in that destination.`);
+        throw new Error(`${getProfile().botName} needs ${names} in that destination.`);
     }
 }
 
 function renderPanel(settings, ownerUserId, { markSuccess = false } = {}) {
+    const profile = getProfile();
     const session = sessions.create({
         guildId: settings.guildId,
         ownerUserId,
     });
-    const blocks = Object.entries(CHANNEL_EDITORS).map(([key, editor]) => ({
-        kind: 'section',
-        content: [
-            `### ${editor.label}\n${settings.channels[key] ? `<#${settings.channels[key]}>` : 'Disabled'}`
-                + `\n-# ${editor.description}`,
-        ],
-        accessory: editButton(session, key),
-    }));
+    const blocks = profile.destinationKeys.map((key) => {
+        const editor = CHANNEL_EDITORS[key];
+        return {
+            kind: 'section',
+            content: [
+                `### ${editor.label}\n${settings.channels[key] ? `<#${settings.channels[key]}>` : 'Disabled'}`
+                    + `\n-# ${editor.description}`,
+            ],
+            accessory: editButton(session, key),
+        };
+    });
 
     const updated = formatUpdated(settings, markSuccess);
     const document = createAdminPanelDocument({
-        title: 'Warden Logging Settings',
-        description: 'Configure Warden-owned logging channels per category.',
+        title: `${profile.botName} Logging Settings`,
+        description: `Configure ${profile.botName}-owned logging channels per category.`,
+        accentColor: profile.identityBrandColor,
         fields: updated ? [{ name: 'Updated', value: updated }] : [],
         editorBlocks: blocks,
         ephemeral: true,
@@ -132,7 +139,8 @@ async function loadSettings(guildId) {
 async function showChannelModal(interaction, parts, state) {
     const key = state.key ?? parts[0];
     const editor = CHANNEL_EDITORS[key];
-    if (!editor) throw new Error('Unknown logging channel setting.');
+    const profile = getProfile();
+    if (!editor || !profile.destinationKeys.includes(key)) throw new Error('Unknown logging channel setting.');
     const settings = await loadSettings(interaction.guildId);
     const customId = state.panelSession.buildForm(
         'saveChannel',
@@ -144,7 +152,7 @@ async function showChannelModal(interaction, parts, state) {
         label: editor.label,
         description: 'Choose one channel or clear to disable this destination.',
         customId: 'channel',
-        placeholder: 'Choose a Warden destination...',
+        placeholder: `Choose a ${profile.botName} destination...`,
         selectedChannelId: interaction.guild?.channels.cache.has(settings.channels[key])
             ? settings.channels[key]
             : undefined,
@@ -165,7 +173,9 @@ async function replacePanel(interaction, settings, state) {
 
 async function saveChannel(interaction, parts, state) {
     const key = parts[0];
-    if (!CHANNEL_EDITORS[key]) throw new Error('Unknown logging channel setting.');
+    if (!CHANNEL_EDITORS[key] || !getProfile().destinationKeys.includes(key)) {
+        throw new Error('Unknown logging channel setting.');
+    }
     const channel = getModalSelectedChannel(interaction, 'channel');
     assertUsableDestination(interaction, channel, key);
     const currentSettings = await loadSettings(interaction.guildId);

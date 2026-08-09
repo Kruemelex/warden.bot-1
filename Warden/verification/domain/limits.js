@@ -1,4 +1,4 @@
-const { DISCORD_MESSAGE_LIMITS } = require('../../ux/components/budget');
+const { DISCORD_MESSAGE_LIMITS } = require('../../../ux/components/budget');
 
 const VERIFICATION_UI_LIMITS = Object.freeze({
     attachmentsPerMessage: DISCORD_MESSAGE_LIMITS.attachments,

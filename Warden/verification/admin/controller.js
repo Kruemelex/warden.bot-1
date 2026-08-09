@@ -1,10 +1,10 @@
 const Discord = require('discord.js');
 const { createVerificationLogger } = require('../logging');
-const { createInteractionRouter } = require('../../ux/interactions/router');
+const { createInteractionRouter } = require('../../../ux/interactions/router');
 const {
     acknowledgePanelInteraction,
     deferEphemeralReply,
-} = require('../../ux/interactions/acknowledgement');
+} = require('../../../ux/interactions/acknowledgement');
 const { reportVerificationError } = require('../errorLogging');
 const {
     buildVerificationAdminNotice,
