@@ -26,6 +26,22 @@ function timeConvertDS(timestamp) {
 	const formattedDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 	return formattedDate
 }
+async function sendLeaderboardEmbeds(interaction, embeds, content) {
+	const chunks = []
+	for (let index = 0; index < embeds.length; index += 10) chunks.push(embeds.slice(index, index + 10))
+	await interaction.editReply({ content, embeds: chunks.shift() ?? [] })
+	for (const chunk of chunks) await interaction.followUp({ embeds: chunk })
+}
+function logLeaderboardError(interaction, err) {
+	try {
+		Promise.resolve(botLog(interaction.guild, new Discord.EmbedBuilder()
+			.setDescription('```' + String(err.stack ?? err) + '```')
+			.setTitle('⛔ Fatal error experienced'), 2, 'error'))
+			.catch(logError => console.log(logError))
+	} catch (logError) {
+		console.log(logError)
+	}
+}
 module.exports = {
 data: new Discord.SlashCommandBuilder()
 	.setName('leaderboard')
@@ -64,7 +80,7 @@ data: new Discord.SlashCommandBuilder()
 					.addChoices(
 						{ name: 'Alliance Challenger', value: 'Challenger' },
 						{ name: 'Alliance Chieftain', value: 'Chieftain' },
-						{ name: 'Fer-de-Lance', value: 'Fdl	' },
+						{ name: 'Fer-de-Lance', value: 'Fdl' },
 						{ name: 'Krait Mk II', value: 'Kraitmk2' }
 				)
 			)
@@ -89,20 +105,18 @@ data: new Discord.SlashCommandBuilder()
 					},
 				)
 				.setTimestamp()
-			interaction.editReply({ embeds: [embed] })
+			await interaction.editReply({ embeds: [embed] })
 		}
 		if (interaction.options.getSubcommand() === 'speedrun') {
-			let data = interaction.options._hoistedOptions.map(i => i.value)
 			const discordConvert = { 
-				"thargoid": capitalizeFirstLetter(data[0]),
-				"shipClass": capitalizeFirstLetter(data[1]),
+				"thargoid": capitalizeFirstLetter(interaction.options.getString('variant', true)),
+				"shipClass": capitalizeFirstLetter(interaction.options.getString('shipclass', true)),
 			}
 			try {
 				const values = null
 				const sql = `SELECT * FROM Speedruns_${discordConvert.thargoid}_${discordConvert.shipClass}`
 				const response = await database.query(sql, values)
 				if (response.length > 0) {
-					query_result = response
 					let embeds = []
 					response.forEach((i,index) => {
 						const embed = new Discord.EmbedBuilder()
@@ -126,30 +140,26 @@ data: new Discord.SlashCommandBuilder()
 							.setTimestamp()
 						embeds.push(embed)
 					})
-					interaction.editReply({ embeds: embeds })
+					await sendLeaderboardEmbeds(interaction, embeds)
+				} else {
+					await interaction.editReply({ content: 'No speedrun records were found for that variant and ship class.' })
 				}
 			}
 			catch (err) {
 				console.log(err)
-				botLog(interaction.guild,new Discord.EmbedBuilder()
-					.setDescription('```' + err.stack + '```')
-					.setTitle(`⛔ Fatal error experienced`)
-					,2
-					,'error'
-				)
+				await interaction.editReply({ content: 'Unable to load the speedrun leaderboard right now. Please try again later.' })
+				logLeaderboardError(interaction, err)
 			}
 		}
 		if (interaction.options.getSubcommand() === 'ace') {
-			let data = interaction.options._hoistedOptions.map(i => i.value)
 			const discordConvert = {
-				"shipClass": data[0],
+				"shipClass": interaction.options.getString('shipclass', true),
 			}
 			try {
 				const values = null
 				const sql = `SELECT * FROM Ace_Top10_${discordConvert.shipClass}`
 				const response = await database.query(sql, values)
 				if (response.length > 0) {
-					query_result = response
 					let embeds = []
 					response.forEach((i,index) => {
 						
@@ -174,17 +184,15 @@ data: new Discord.SlashCommandBuilder()
 							.setTimestamp()
 						embeds.push(embed)
 					})
-					interaction.editReply({ content: "For those who go beyond. This rank is a true test of a pilot’s abilities, based on a composite score of *ammo usage*, *total damage taken*, and *time taken*. Use a one of the four ships below and any combination of Gauss cannons to defeat a Medusa. Learn more about this rank in the #rank-requirements channel.", embeds: embeds })
+					await sendLeaderboardEmbeds(interaction, embeds, "For those who go beyond. This rank is a true test of a pilot’s abilities, based on a composite score of *ammo usage*, *total damage taken*, and *time taken*. Use a one of the four ships below and any combination of Gauss cannons to defeat a Medusa. Learn more about this rank in the #rank-requirements channel.")
+				} else {
+					await interaction.editReply({ content: 'No ace records were found for that ship class.' })
 				}
 			}
 			catch (err) {
 				console.log(err)
-				botLog(interaction.guild,new Discord.EmbedBuilder()
-					.setDescription('```' + err.stack + '```')
-					.setTitle(`⛔ Fatal error experienced`)
-					,2
-					,'error'
-				)
+				await interaction.editReply({ content: 'Unable to load the ace leaderboard right now. Please try again later.' })
+				logLeaderboardError(interaction, err)
 			}
 
 		}

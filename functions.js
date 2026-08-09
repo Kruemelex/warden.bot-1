@@ -3,6 +3,7 @@ const fs = require("fs")
 const path = require("path")
 const glob = require('glob')
 const Discord = require('discord.js')
+let botLogDestinationResolver
 //This functions.js file serves as a global functions context for all bots that may reuse the same code.
 /**
  * @author (testfax) Medi0cr3 @testfax
@@ -10,6 +11,12 @@ const Discord = require('discord.js')
  */
 
 const thisBotFunctions = { 
+    registerBotLogDestinationResolver: function(resolver) {
+        if (resolver !== undefined && typeof resolver !== 'function') {
+            throw new TypeError('Bot-log destination resolver must be a function.');
+        }
+        botLogDestinationResolver = resolver
+    },
     adjustActive: function(current,mode) {
         try {
             function getFile(current) {
@@ -64,6 +71,16 @@ const thisBotFunctions = {
         let inactiveBots = []
         inactiveBots.push(config.botTypes.filter(bot => bot.active === false).map(bot => bot.botName))
         return {activeBot,inactiveBots}
+    },
+    getIdentityBrandColor: function(botName) {
+        const activeBot = botName
+            ? config.botTypes.find((bot) => bot.botName === botName)
+            : thisBotFunctions.botIdent().activeBot
+        const color = String(activeBot?.identityBrandColor ?? '').trim()
+        if (!/^#[0-9a-f]{6}$/iu.test(color)) {
+            throw new Error(`${activeBot?.botName ?? 'Active bot'} requires a valid identityBrandColor.`)
+        }
+        return color
     },
     fileNameBotMatch: function(e) {
         //This only works, because the codebase is not one of the matching bot names. Case-Sensitive.
@@ -190,7 +207,11 @@ const thisBotFunctions = {
                             if (event && typeof event === 'object') {
                                 for (const key in event) {
                                     if (typeof event[key] === 'function') {
-                                        client.on(key, (...args) => event[key](...args, client));
+                                        client.on(key, (...args) => {
+                                            Promise.resolve().then(() => event[key](...args, client)).catch((error) => {
+                                                console.error(`Unhandled ${key} event failure from ${filePath}:`, error);
+                                            });
+                                        });
                                     }
                                 }
                             }
@@ -420,7 +441,7 @@ const thisBotFunctions = {
             ,'error'
         )
     },
-    botLog: async (bot,embed,severity,logType) => {
+    botLog: async (bot,embed,severity,logType,deliveryOptions = {}) => {
         /**
          * botLog(
                 @param *guild object required
@@ -462,11 +483,18 @@ const thisBotFunctions = {
 // .setColor('#f2ff00') //bight yellow
         let logFeature
         let logTranslate
+        let logDestinationDisabled = false
         switch (logType) {
             case "messages":
 				logFeature = thisBotFunctions.botIdent().activeBot.messagesChannel
                 logTranslate = 'MESSAGESCHANNEL'
                 break;
+			case "users":
+				logFeature = thisBotFunctions.botIdent().activeBot.botName === 'GuardianAI'
+					? thisBotFunctions.botIdent().activeBot.staffChannel
+					: thisBotFunctions.botIdent().activeBot.logsChannel
+				logTranslate = 'USERSCHANNEL'
+				break;
 			case "info":
 				logFeature = thisBotFunctions.botIdent().activeBot.logsChannel
                 logTranslate = 'LOGCHANNEL'
@@ -487,15 +515,44 @@ const thisBotFunctions = {
                 logFeature = thisBotFunctions.botIdent().activeBot.logsChannel
                 logTranslate = 'LOGCHANNEL'
 		}
+		if (botLogDestinationResolver) {
+            const resolvedLogFeature = botLogDestinationResolver({
+                fallbackChannelId: logFeature,
+                guildId: bot?.id ?? bot?.guild?.id ?? bot?.guilds?.cache?.first?.()?.id,
+                logType: logType ?? 'info',
+            })
+            if (resolvedLogFeature !== undefined) {
+                logFeature = resolvedLogFeature
+                logDestinationDisabled = resolvedLogFeature === null
+            }
+        }
 		embed.setColor(logColor)
             .setTimestamp()
             .setFooter({ text: `${thisBotFunctions.botIdent().activeBot.botName}  Logs`, iconURL: thisBotFunctions.botIdent().activeBot.icon });
 		if (logFeature) {
-            await bot.channels.cache.get(logFeature).send({ embeds: [embed], })
+            const channel = bot.channels.cache.get(logFeature)
+            if (channel) {
+                if (typeof deliveryOptions.beforeDispatch === 'function') {
+                    await deliveryOptions.beforeDispatch()
+                }
+                return channel.send({
+                    embeds: [embed],
+                    ...(deliveryOptions.nonce ? { nonce: deliveryOptions.nonce } : {}),
+                    ...(deliveryOptions.enforceNonce === true ? { enforceNonce: true } : {}),
+                }).catch((error) => {
+                    error.deliveryMayHaveSucceeded = true
+                    throw error
+                })
+            }
+		}
+		const error = new Error(`ERROR: ${logTranslate} botTypes configuration for channels NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
+        error.code = 'WARDEN_BOTLOG_CHANNEL_UNAVAILABLE'
+        if (logDestinationDisabled) {
+            if (deliveryOptions.requireDelivery === true) throw error
+            return undefined
         }
-        else {
-            console.error(`ERROR: ${logTranslate} botTypes configuration for channels NOT Found, Logging will not work. OR your bot permissions are not high enough.`)
-        }
+        if (deliveryOptions.requireDelivery === true) throw error
+        console.error(error.message)
 	},
     getSortedRoleIDs: (message) => {
         /**

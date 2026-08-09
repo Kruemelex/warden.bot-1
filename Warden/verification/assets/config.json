@@ -1,0 +1,185 @@
+{
+    "gallery": {
+        "composite": {
+            "tileSize": 358,
+            "labelPadding": 6,
+            "labelSize": 64
+        },
+        "rotationAlignmentTile": {
+            "width": 512,
+            "height": 512,
+            "background": "rgba(0, 0, 0, 0)",
+            "centerScale": 0.4,
+            "outerScale": 0.2,
+            "outerRadius": 178,
+            "glow": true
+        }
+    },
+    "prompt": {
+        "width": 960,
+        "minHeight": 320,
+        "padding": 64,
+        "fontSize": 64,
+        "lineHeight": 88,
+        "backgroundFillEnabled": true,
+        "pixelNoiseCount": 5200,
+        "decoyGlyphs": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?/#%&@+=<>",
+        "decoyGlyphCount": 76,
+        "decoyGlyphCountJitterRatio": 0.1,
+        "obfuscationLineCount": 9,
+        "obfuscationLineWidthMin": 1.5,
+        "obfuscationLineWidthMax": 16,
+        "obfuscationLineThinAlphaMax": 0.46,
+        "obfuscationLineThickAlphaMax": 0.1,
+        "obfuscationLineCurveAmount": 110,
+        "obfuscationLineAngleJitter": 18,
+        "maxCharacterRotation": 0.08,
+        "characterJitter": 6,
+        "textWaveAmplitude": 5,
+        "textWaveFrequency": 0.45,
+        "textWaveRotation": 0.025,
+        "characterScaleJitter": 0.02,
+        "characterSkewJitter": 0.01,
+        "characterSpacingJitter": 3,
+        "textStrokeWidthMin": 0,
+        "textStrokeWidthMax": 0,
+        "textShadowBlur": 0,
+        "textShadowOffsetMax": 0,
+        "textShadowAlphaMin": 0,
+        "textShadowAlphaMax": 0,
+        "textAlphaMin": 0.82,
+        "textAlphaMax": 0.92,
+        "textStrokeAlphaMin": 0,
+        "textStrokeAlphaMax": 0,
+        "textFillAlphaMin": 0.58,
+        "textFillAlphaMax": 0.74,
+        "textFontWeights": [
+            "700",
+            "800",
+            "900"
+        ],
+        "textFontFamilies": [
+            "Arial",
+            "Helvetica",
+            "Verdana",
+            "Trebuchet MS"
+        ],
+        "textFillColors": [
+            "#edf6f8",
+            "#e2eef4",
+            "#f3ead4"
+        ],
+        "decoyGlyphAlphaMin": 0.24,
+        "decoyGlyphAlphaMax": 0.42,
+        "decoyGlyphSizeMin": 46,
+        "decoyGlyphSizeMax": 68,
+        "cutoutCount": 6,
+        "cutoutRadiusMin": 2,
+        "cutoutRadiusMax": 6,
+        "cutoutAlpha": 0.14,
+        "backgroundPattern": {
+            "enabled": false,
+            "gridLineCount": 48,
+            "ringCount": 32,
+            "microLineCount": 180,
+            "alpha": 0.14,
+            "tileSize": 48,
+            "motifSize": 8
+        },
+        "distortion": {
+            "enabled": true,
+            "rowShiftAmplitude": 3,
+            "rowShiftFrequency": 0.035,
+            "columnShiftAmplitude": 1,
+            "columnShiftFrequency": 0.025,
+            "finalWave": {
+                "enabled": true,
+                "amplitude": 5,
+                "frequency": 0.045,
+                "phaseJitter": true
+            }
+        },
+        "palettes": [
+            {
+                "background": [
+                    "#07111f",
+                    "#14213d",
+                    "#0b1020"
+                ],
+                "curve": [
+                    "#76d7ff",
+                    "#f5b7ff",
+                    "#ff7100"
+                ],
+                "glyph": [
+                    "#d9f3ff",
+                    "#ffd9fb",
+                    "#ffc68a"
+                ],
+                "stroke": "rgba(118, 215, 255, 0.78)"
+            },
+            {
+                "background": [
+                    "#1c0b2b",
+                    "#3d145c",
+                    "#10091f"
+                ],
+                "curve": [
+                    "#ff9cf5",
+                    "#8ad8ff",
+                    "#ff7100"
+                ],
+                "glyph": [
+                    "#ffe2fb",
+                    "#d8f4ff",
+                    "#ffd6a6"
+                ],
+                "stroke": "rgba(255, 156, 245, 0.78)"
+            },
+            {
+                "background": [
+                    "#06261d",
+                    "#115740",
+                    "#071611"
+                ],
+                "curve": [
+                    "#8dffcc",
+                    "#ffe08a",
+                    "#ff7100"
+                ],
+                "glyph": [
+                    "#dcfff0",
+                    "#fff2cc",
+                    "#ffc68a"
+                ],
+                "stroke": "rgba(141, 255, 204, 0.78)"
+            }
+        ],
+        "characterPositionMarginX": 72,
+        "characterPositionMarginY": 72,
+        "fontSizeJitter": 2,
+        "textStrokeEnabled": false,
+        "textShadowEnabled": false,
+        "textOffsetShadowEnabled": false,
+        "characterOverlapEnabled": true,
+        "characterOverlapChance": 0.85,
+        "characterOverlapMin": 3,
+        "characterOverlapMax": 8,
+        "characterOcclusionLineCountMin": 0,
+        "characterOcclusionLineCountMax": 0,
+        "characterOcclusionLineWidthMin": 4,
+        "characterOcclusionLineWidthMax": 10,
+        "characterOcclusionLineAlphaMin": 0.34,
+        "characterOcclusionLineAlphaMax": 0.62,
+        "largeDecoyGlyphs": {
+            "enabled": true,
+            "count": 2,
+            "alphaMin": 0.055,
+            "alphaMax": 0.12,
+            "sizeMin": 92,
+            "sizeMax": 168,
+            "rotationMax": 0.35,
+            "centerBias": 0.66
+        }
+    }
+}

@@ -6,8 +6,18 @@ const Discord = require("discord.js");
 /* eslint-disable no-bitwise */
 const { testInputs } = require('../math/commons/testInput')
 const { getChart } = require('../math/commons/getChart')
-const Score = require('../math/commons/scoring')
-const damageThresholds = require("../math/data/dmgThresholds.json")
+const { calculateAceScore, shipDataTable } = require('./aceScoreCalculator')
+const { buildApprovalMessage } = require('./leaderboardApprovalMessages')
+const {
+    isTransientDatabaseError,
+    retryTransientDatabaseOperation,
+} = require('../../../Warden/db/errorPolicy')
+const { getLeaderboardApprovalChannelId } = require('../../../loggingSettings/service')
+
+async function queryWithRetry(sql, values) {
+    const result = await retryTransientDatabaseOperation(() => database.query(sql, values))
+    return result.value
+}
 /*
 Damage threshold entry:
 "Interceptor name" : {
@@ -16,7 +26,6 @@ Damage threshold entry:
 	"premium" : double array - damage thresholds w/ premium ammo [#med][#small]
 }
 */
-const shipDataTable = require("../math/data/shipData.json");
 /*
 Ship data entry:
 "ship_id" : {
@@ -92,6 +101,14 @@ module.exports = {
             args[key.name] = key.value
         }
 
+        const submissionRequested = args.submit_url !== undefined
+        if (submissionRequested) {
+            await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral })
+        }
+        const replyPrivately = (content) => submissionRequested
+            ? interaction.editReply({ content })
+            : interaction.reply({ content, flags: Discord.MessageFlags.Ephemeral })
+
         // Set Globals
         args.targetRun = 100;
 
@@ -102,7 +119,7 @@ module.exports = {
         // Test Inputs
         let testPassed = testInputs(args, interaction)
         if (testPassed != true) {
-            interaction.reply(testPassed)
+            await replyPrivately(testPassed)
             return
         }
 	    
@@ -127,82 +144,34 @@ module.exports = {
         let medfit = totalfit - shipDataTable[args.shiptype].small_hp;
         // Mediums can be fitted
         if (args.gauss_medium_number > medfit){
-            interaction.reply(`Your poor ${shipDataTable[args.shiptype].name} cannot fit ${args.gauss_medium_number} medium gauss.`);
+            await replyPrivately(`Your poor ${shipDataTable[args.shiptype].name} cannot fit ${args.gauss_medium_number} medium gauss.`);
             return
         }
         if (args.gauss_medium_number + args.gauss_small_number > totalfit){
-            interaction.reply(`Howerver hard you may try, it is impossible to fit ${weaponsString} in that ${shipDataTable[args.shiptype].name} ...`);
+            await replyPrivately(`Howerver hard you may try, it is impossible to fit ${weaponsString} in that ${shipDataTable[args.shiptype].name} ...`);
             return
         }
 
-        // Calculate Damage Threshold
-        let damageThreshold = damageThresholds[args.interceptor][args.ammo][args.gauss_medium_number][args.gauss_small_number];
-        args.damage_threshold = damageThreshold;
-        
-        // Calculate Damage Threshold with basic ammo
-        let damageThresholdBasic = damageThresholds[args.interceptor]["basic"][args.gauss_medium_number][args.gauss_small_number];
-        
-        // Calculate damage multiplier
-        let dmgMult = 1.01
-        let dmgAmmoMult = 1.0
-        switch (args.interceptor){
-            case 'Cyclops':
-            case 'Basilisk':
-                break;
-            case 'Medusa':
-                dmgMult = dmgMult * 140.0/175.0;
-                break;
-            case 'Hydra':
-                dmgMult = dmgMult * 140.0/220.0;
-                break;
-        }
-        switch (args.ammo){
-            case 'basic':
-                break;
-            case 'standard':
-                dmgMult = dmgMult * 1.15;
-                dmgAmmoMult = dmgAmmoMult * 1.15;
-                break;
-            case 'premium':
-                dmgMult = dmgMult * 1.3;
-                dmgAmmoMult = dmgAmmoMult * 1.3;
-                break;
-        }
-
-        // Medium gauss does 35 base AX damage, small gauss does 20 base AX damage per round
-	    // Compute total damage done
-        let shot_damage_fired = (args.shots_medium_fired * 35.0 + args.shots_small_fired * 20.0)*dmgMult;
-        args.shot_damage_fired = shot_damage_fired;
+        const calculation = calculateAceScore(args)
+        const damageThreshold = calculation.damageThreshold
+        const shot_damage_fired = calculation.shotDamageFired
 
         // Avoid funnies with >100% accuracy fake submissions
         // Allow funnies if Aran is involved
         if (shot_damage_fired.toFixed(2) < damageThreshold) {
             if(interaction.member.id === "346415786505666560"){ // 346415786505666560 - Aran
-                interaction.reply(`Thank you ${interaction.member} for breaking my accuracy calculations again! Please let me know where I have failed, and I will fix it - CMDR Mechan`);
+                await replyPrivately(`Thank you ${interaction.member} for breaking my accuracy calculations again! Please let me know where I have failed, and I will fix it - CMDR Mechan`);
             } else {
-                interaction.reply(`Comrade ${interaction.member} ... It appears your entry results (${shot_damage_fired}) vs (${damageThreshold}) in greater than 100% accuracy. Unfortunately [PC] CMDR Aranionros Stormrage is the only one allowed to achieve >100% accuracy. Since you are not [PC] CMDR Aranionros Stormrage, please check your inputs and try again.`);
+                await replyPrivately(`Comrade ${interaction.member} ... It appears your entry results (${shot_damage_fired}) vs (${damageThreshold}) in greater than 100% accuracy. Unfortunately [PC] CMDR Aranionros Stormrage is the only one allowed to achieve >100% accuracy. Since you are not [PC] CMDR Aranionros Stormrage, please check your inputs and try again.`);
             }
             return(-1);
         }
 
-        // Calculate Score
-        let result;
-        let goidType = args.interceptor;
-        let targetRun = 100;
-        args.efficiency = damageThreshold/shot_damage_fired;
-            
-        // Premium/standard penalties
-        // Find additional time necessary to fire off basic damage
-        let salvoDamage = 1.01 * (args.gauss_medium_number * 35 + args.gauss_small_number * 20);
-        // Extra penalty time for non-basic ammo = extra time required to fire shots + 10% (10% due to easier to keep on target for shorter time)
-        let extraTime = 1.5*(2.05/salvoDamage)*(damageThresholdBasic - damageThreshold/dmgAmmoMult);
-        // Hull loss multiplier "time to fire basic shots"/"time to fire premium shots"
-        let hullLossMultiplier = damageThresholdBasic*dmgAmmoMult/damageThreshold;
-            
-        args.extraTime = extraTime;
-        args.hullLossMultiplier = hullLossMultiplier;
-
-        result = Score.score_this(args)
+        const result = calculation.result
+        const goidType = args.interceptor
+        const targetRun = args.targetRun
+        const extraTime = args.extraTime
+        const hullLossMultiplier = args.hullLossMultiplier
 
 
         // Create Chart
@@ -262,47 +231,39 @@ module.exports = {
         const buttonRow = new Discord.ActionRowBuilder()
         .addComponents(new Discord.ButtonBuilder().setLabel('Learn more about the Ace Score Calculator').setStyle(Discord.ButtonStyle.Link).setURL('https://wiki.antixenoinitiative.com/en/Ace-Rank-Rework'),)
 
-        interaction.reply({ embeds: [returnEmbed.setTimestamp()], components: [buttonRow] });
-
-        // console.log(args.submit_url);
-        if (args.submit_url !== undefined) {
-            ace_submit(args, result, interaction)
+        if (!submissionRequested) {
+            await interaction.reply({ embeds: [returnEmbed.setTimestamp()], components: [buttonRow] });
+        } else {
+            await ace_submit(args, result, interaction)
             // console.log("Submission triggered");
             async function ace_submit(args, result, interaction) {
                 let userID = interaction.member.id
                 let name = interaction.member.displayName
                 let timestamp = Date.now()
-                let staffChannel = process.env.STAFFCHANNELID
+                let staffChannel = getLeaderboardApprovalChannelId(interaction.guildId)
+                let submissionId = null
+                let insertAttempted = false
         
                 // Checks
                 // console.log(staffChannel);
-                if (!args.submit_url.startsWith('https://')) { return interaction.followUp({ content: `❌ Please enter a valid URL, eg: https://...` }) }
+                if (!args.submit_url.startsWith('https://')) {
+                    return interaction.editReply({ content: `❌ Please enter a valid URL, eg: https://...` })
+                }
         
                 // Submit
-                if(interaction.guild.channels.cache.get(staffChannel) === undefined)  { // Check for staff channel
-                    return interaction.followUp({ content: `Staff Channel not found` })
+                if(!staffChannel || interaction.guild.channels.cache.get(staffChannel) === undefined)  { // Check for staff channel
+                    return interaction.editReply({ content: `Staff Channel not found` })
                 }
                 try {
                     const values = [userID]
                     const sql = 'SELECT * FROM `ace` WHERE user_id = (?) AND approval = 1';
-                    const response = await database.query(sql, values)
+                    const response = await queryWithRetry(sql, values)
                     if (response.length > 0) {
                         if (parseFloat(response[0].score) > parseFloat(result.score.toFixed(2))) {
-                            interaction.editReply({ content: `⛔ Error: Your existing entry has a higher score, submission denied.` })
-                            return
+                            return interaction.editReply({ content: `⛔ Error: Your existing entry has a higher score, submission denied.` })
                         }
                     }
-                }
-                catch (err) {
-                    console.log(err)
-                    botLog(i.guild,new Discord.EmbedBuilder()
-                        .setDescription('```' + err.stack + '```')
-                        .setTitle(`⛔ Fatal error experienced: ace_submit()`)
-                        ,2
-                        ,'error'
-                    )
-                }
-                try {
+
                     const submission_values = [
                         userID,
                         name,
@@ -321,83 +282,87 @@ module.exports = {
                     const submission_sql = `
                         INSERT INTO ace (user_id, name, timetaken, mgauss, sgauss, mgaussfired, sgaussfired, percenthulllost,score, link, approval, date, shiptype) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?);
                     `;
-                    await database.query(submission_sql, submission_values)
-                } 
-                catch (err) {
-                    console.log(err)
-                    botLog(interaction.guild,new Discord.EmbedBuilder()
-                        .setDescription('```' + err.stack + '```')
-                        .setTitle(`⛔ Fatal error experienced`)
-                        ,2
-                        ,'error'
-                    )
-                    return interaction.editReply({ content: `Something went wrong creating a Submission, please try again or contact staff!` })
-                }
-                try {
-                    const values = [userID,0,timestamp]
-                    const sql = 'SELECT id FROM `ace` WHERE user_id = (?) AND approval = (?) AND date = (?)';
-                    const response = await database.query(sql, values)
-                    if (response.length > 0) {
-                        let submissionId = response[0].id
-                        const returnEmbed = new Discord.EmbedBuilder()
-                            .setColor('#FF7100')
-                            .setTitle(`**Ace Submission Complete**`)
-                            .setDescription(`Congratulations <@${interaction.member.id}>, your submission is complete. Please be patient while our staff approve your submission. Submission ID: #${submissionId}`)
-                            .addFields(
-                                {name: "Pilot", value: `<@${userID}>`, inline: true},
-                                {name: "Ship", value: `${args.shiptype}`, inline: true},
-                                {name: "Score", value: `${result.score.toFixed(2)}`, inline: true},
-                                {name: "link", value: `${args.submit_url}`, inline: true}
-                            )
-                        interaction.editReply({ embeds: [returnEmbed.setTimestamp()] })
-        
-                        // Create staff interaction
-                        const staffEmbed = new Discord.EmbedBuilder()
-                            .setColor('#FF7100')
-                            .setTitle(`**New Ace Submission**`)
-                            .setDescription(`Please select Approve or Deny below if the video is legitimate and matches the fields below. NOTE: This will not assign any ranks, only approve to the Leaderboard.`)
-                            .addFields(
-                                {name: "Pilot", value: `<@${userID}>`, inline: true},
-                                {name: "Ship", value: `${args.shiptype}`, inline: true},
-                                {name: "Score", value: `${result.score.toFixed(2)}`, inline: true},
-                                {name: "link", value: `${args.submit_url}`, inline: true},
-                                {name: "Time(sec)", value: `${args.time_in_seconds}`, inline: true},
-                                {name: "Medium Gauss Modules", value: `${args.gauss_medium_number}`, inline: true},
-                                {name: "Small Gauss Modules", value: `${args.gauss_small_number}`, inline: true},
-                                {name: "Medium Gauss Fired", value: `${args.shots_medium_fired}`, inline: true},
-                                {name: "Small Gauss Fired", value: `${args.shots_small_fired}`, inline: true},
-                                {name: "Hull % Lost", value: `${args.percenthulllost}`, inline: true}
-                            )
-                        const row = new Discord.ActionRowBuilder()
-                            .addComponents(new Discord.ButtonBuilder().setCustomId(`submission-ace-approve-${submissionId}`).setLabel('Approve').setStyle(Discord.ButtonStyle.Success),)
-                            .addComponents(new Discord.ButtonBuilder().setCustomId(`submission-ace-deny-${submissionId}`).setLabel('Delete').setStyle(Discord.ButtonStyle.Danger),)
-                        let buttonResult = null;
-                        buttonResult = await interaction.guild.channels.cache.get(staffChannel).send({ embeds: [staffEmbed], components: [row] });
-                        const embedId = buttonResult.id
-                        try {
-                            const submissionUpdate_values = [embedId,submissionId]
-                            const submissionUpdate_sql = `UPDATE ace SET embed_id = (?) WHERE id = (?);`
-                            await database.query(submissionUpdate_sql, submissionUpdate_values)
-                        } 
-                        catch (err) {
-                            console.log(err)
-                            botLog(interaction.guild,new Discord.EmbedBuilder()
-                                .setDescription('```' + err.stack + '```')
-                                .setTitle(`⛔ Fatal error experienced`)
-                                ,2
-                                ,'error'
-                            )
-                        }
+                    insertAttempted = true
+                    try {
+                        const insertResult = await database.query(submission_sql, submission_values)
+                        submissionId = insertResult.insertId
                     }
+                    catch (error) {
+                        if (!isTransientDatabaseError(error)) throw error
+
+                        const recoveryRows = await queryWithRetry(
+                            `SELECT id FROM \`ace\`
+                            WHERE user_id = (?) AND approval = 0 AND date = (?)
+                                AND score = (?) AND link = (?) AND shiptype = (?)
+                            ORDER BY id DESC LIMIT 1`,
+                            [userID, timestamp, result.score.toFixed(2), args.submit_url, args.shiptype],
+                        )
+                        if (recoveryRows.length === 0) throw error
+                        submissionId = recoveryRows[0].id
+                        console.warn(`Recovered Ace submission #${submissionId} after a timed-out INSERT response.`)
+                    }
+
+                    if (!Number.isSafeInteger(Number(submissionId)) || Number(submissionId) <= 0) {
+                        throw new Error('The Ace submission was inserted without a valid submission ID.')
+                    }
+
+                    const submissionEmbed = new Discord.EmbedBuilder()
+                        .setColor('#FF7100')
+                        .setTitle(`**Ace Submission Complete**`)
+                        .setDescription(`Congratulations <@${interaction.member.id}>, your submission is complete. Please be patient while our staff approve your submission. Submission ID: #${submissionId}`)
+                        .addFields(
+                            {name: "Pilot", value: `<@${userID}>`, inline: true},
+                            {name: "Ship", value: `${args.shiptype}`, inline: true},
+                            {name: "Score", value: `${result.score.toFixed(2)}`, inline: true},
+                            {name: "link", value: `${args.submit_url}`, inline: true}
+                        )
+
+                    let buttonResult = null;
+                    buttonResult = await interaction.guild.channels.cache.get(staffChannel).send(buildApprovalMessage('ace', {
+                        id: submissionId,
+                        user_id: userID,
+                        name,
+                        timetaken: args.time_in_seconds,
+                        mgauss: args.gauss_medium_number,
+                        sgauss: args.gauss_small_number,
+                        mgaussfired: args.shots_medium_fired,
+                        sgaussfired: args.shots_small_fired,
+                        percenthulllost: args.percenthulllost,
+                        score: result.score,
+                        link: args.submit_url,
+                        shiptype: args.shiptype,
+                    }));
+                    const embedId = buttonResult.id
+                    const submissionUpdate_values = [embedId,submissionId]
+                    const submissionUpdate_sql = `UPDATE ace SET embed_id = (?) WHERE id = (?);`
+                    await queryWithRetry(submissionUpdate_sql, submissionUpdate_values)
+
+                    await interaction.channel.send({ embeds: [submissionEmbed.setTimestamp()] })
+                    await interaction.editReply({
+                        content: `✅ Submission #${submissionId} recorded. It is now up for review by Staff.`,
+                    }).catch((responseError) => {
+                        console.error('Failed to send the Ace submission acknowledgement:', responseError)
+                    })
                 }
                 catch (err) {
                     console.log(err)
-                    botLog(i.guild,new Discord.EmbedBuilder()
-                        .setDescription('```' + err.stack + '```')
-                        .setTitle(`⛔ Fatal error experienced: ace_submit()`)
-                        ,2
-                        ,'error'
-                    )
+                    void Promise.resolve().then(() => botLog(
+                        interaction.guild,
+                        new Discord.EmbedBuilder()
+                            .setDescription('```' + err.stack + '```')
+                            .setTitle(`⛔ Ace submission failed`),
+                        2,
+                        'error',
+                    )).catch((logError) => console.error('Failed to log Ace submission error:', logError))
+
+                    const content = submissionId
+                        ? `⚠️ Submission #${submissionId} was recorded, but Warden could not finish posting all confirmation messages. Please do not resubmit it; contact Staff.`
+                        : insertAttempted
+                            ? '⚠️ Warden could not confirm whether the submission was recorded. Please avoid resubmitting immediately and contact Staff.'
+                            : '❌ Warden could not create the submission. Please try again or contact Staff.'
+                    return interaction.editReply({ content }).catch((responseError) => {
+                        console.error('Failed to send the Ace submission error response:', responseError)
+                    })
                 }
             }
         }
