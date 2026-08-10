@@ -1,35 +1,72 @@
 'use strict';
 
-const CHANNEL_COLUMNS = Object.freeze({
-    general: 'general_log_channel_id',
-    users: 'user_log_channel_id',
-    messages: 'message_audit_channel_id',
-    error: 'error_log_channel_id',
-    staff: 'staff_log_channel_id',
-    approvals: 'leaderboard_approval_channel_id',
-});
+const CHANNEL_KEYS = Object.freeze([
+    'general',
+    'users',
+    'messages',
+    'error',
+    'staff',
+    'approvals',
+]);
 
-function createLoggingSettingsRepository({ database, tableName }) {
+function normalizeGuildId(value) {
+    const guildId = String(value ?? '').trim();
+    if (!guildId) throw new Error('Logging settings require a guild ID.');
+    return guildId;
+}
+
+function normalizeOptionalId(value) {
+    const normalized = String(value ?? '').trim();
+    return normalized || null;
+}
+
+function normalizeRevision(value) {
+    const revision = Number(value);
+    if (!Number.isSafeInteger(revision) || revision < 0) {
+        throw new Error('Logging settings require a non-negative revision.');
+    }
+    return revision;
+}
+
+function payloadFor(guildId, channels, updatedBy) {
+    return {
+        guildId: normalizeGuildId(guildId),
+        channels: Object.fromEntries(CHANNEL_KEYS.map((key) => [
+            key,
+            normalizeOptionalId(channels?.[key]),
+        ])),
+        updatedBy: normalizeOptionalId(updatedBy),
+    };
+}
+
+function createLoggingSettingsRepository({ database, encryption, tableName, context }) {
     if (!database?.query) throw new TypeError('Logging settings require a database query adapter.');
+    if (!encryption?.assertApplicationEncryptionReady
+        || !encryption?.createLookup
+        || !encryption?.decryptJson
+        || !encryption?.encryptJson) {
+        throw new TypeError('Logging settings require an application encryption adapter.');
+    }
     if (!/^[a-z][a-z0-9_]*$/u.test(String(tableName))) {
         throw new TypeError('Logging settings require a safe table name.');
+    }
+    if (!/^[a-z0-9][a-z0-9:._-]{2,127}$/u.test(String(context))) {
+        throw new TypeError('Logging settings require an encryption context.');
     }
 
     let schemaReady;
 
     function ensureSchema() {
         if (!schemaReady) {
+            encryption.assertApplicationEncryptionReady();
             schemaReady = database.query(`
                 CREATE TABLE IF NOT EXISTS ${tableName} (
-                    guild_id VARCHAR(32) NOT NULL PRIMARY KEY,
-                    general_log_channel_id VARCHAR(32) NULL,
-                    user_log_channel_id VARCHAR(32) NULL,
-                    message_audit_channel_id VARCHAR(32) NULL,
-                    error_log_channel_id VARCHAR(32) NULL,
-                    staff_log_channel_id VARCHAR(32) NULL,
-                    leaderboard_approval_channel_id VARCHAR(32) NULL,
+                    guild_lookup BINARY(32) NOT NULL PRIMARY KEY,
+                    key_version SMALLINT UNSIGNED NOT NULL,
+                    payload_nonce BINARY(12) NOT NULL,
+                    payload_tag BINARY(16) NOT NULL,
+                    encrypted_payload MEDIUMBLOB NOT NULL,
                     settings_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
-                    updated_by VARCHAR(32) NULL,
                     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
             `).catch((error) => {
@@ -40,77 +77,99 @@ function createLoggingSettingsRepository({ database, tableName }) {
         return schemaReady;
     }
 
-    function mapRow(row) {
+    function mapRow(row, requestedGuildId) {
         if (!row) return undefined;
+        const decrypted = encryption.decryptJson(context, {
+            keyVersion: row.key_version,
+            nonce: row.payload_nonce,
+            tag: row.payload_tag,
+            ciphertext: row.encrypted_payload,
+        });
+        const decryptedPayload = payloadFor(
+            decrypted?.guildId,
+            decrypted?.channels,
+            decrypted?.updatedBy,
+        );
+        if (decryptedPayload.guildId !== normalizeGuildId(requestedGuildId)) {
+            const error = new Error('Encrypted logging settings belong to a different guild.');
+            error.code = 'LOGGING_SETTINGS_GUILD_MISMATCH';
+            throw error;
+        }
         return Object.freeze({
-            guildId: String(row.guild_id),
-            channels: Object.freeze(Object.fromEntries(Object.entries(CHANNEL_COLUMNS).map(([key, column]) => [
-                key,
-                row[column] == null ? null : String(row[column]),
-            ]))),
+            guildId: decryptedPayload.guildId,
+            channels: Object.freeze(decryptedPayload.channels),
             settingsRevision: Number(row.settings_revision),
-            updatedBy: row.updated_by == null ? null : String(row.updated_by),
+            updatedBy: decryptedPayload.updatedBy,
             updatedAt: row.updated_at ?? null,
         });
     }
 
+    function lookup(guildId) {
+        return encryption.createLookup(`${context}:guild`, normalizeGuildId(guildId));
+    }
+
+    function encryptedPayload(guildId, channels, updatedBy) {
+        const encrypted = encryption.encryptJson(context, payloadFor(guildId, channels, updatedBy));
+        return [encrypted.keyVersion, encrypted.nonce, encrypted.tag, encrypted.ciphertext];
+    }
+
     async function read(guildId) {
         await ensureSchema();
+        const normalizedGuildId = normalizeGuildId(guildId);
         const rows = await database.query(
-            `SELECT * FROM ${tableName} WHERE guild_id = ? LIMIT 1`,
-            [String(guildId)],
+            `SELECT * FROM ${tableName} WHERE guild_lookup = ? LIMIT 1`,
+            [lookup(normalizedGuildId)],
         );
-        return mapRow(rows?.[0]);
+        return mapRow(rows?.[0], normalizedGuildId);
     }
 
     async function seed(guildId, channels) {
         await ensureSchema();
+        const normalizedGuildId = normalizeGuildId(guildId);
+        const encrypted = encryptedPayload(normalizedGuildId, channels, null);
         await database.query(
             `INSERT IGNORE INTO ${tableName} (
-                guild_id, general_log_channel_id, user_log_channel_id, message_audit_channel_id,
-                error_log_channel_id, staff_log_channel_id, leaderboard_approval_channel_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-                String(guildId), channels.general, channels.users,
-                channels.messages, channels.error, channels.staff, channels.approvals,
-            ],
+                guild_lookup, key_version, payload_nonce, payload_tag, encrypted_payload
+            ) VALUES (?, ?, ?, ?, ?)`,
+            [lookup(normalizedGuildId), ...encrypted],
         );
-        return read(guildId);
+        return read(normalizedGuildId);
     }
 
     async function update(guildId, patch, expectedRevision, updatedBy) {
-        const assignments = [];
-        const values = [];
-        for (const [key, value] of Object.entries(patch.channels ?? {})) {
-            const column = CHANNEL_COLUMNS[key];
-            if (!column) throw new Error(`Unknown logging channel setting: ${key}`);
-            assignments.push(`${column} = ?`);
-            values.push(value || null);
+        const normalizedGuildId = normalizeGuildId(guildId);
+        const current = await read(normalizedGuildId);
+        if (!current) {
+            const error = new Error('Logging settings do not exist for this guild.');
+            error.code = 'LOGGING_SETTINGS_MISSING';
+            throw error;
         }
-        if (assignments.length < 1) return read(guildId);
-        assignments.push(
-            'settings_revision = settings_revision + 1',
-            'updated_by = ?',
-            'updated_at = CURRENT_TIMESTAMP',
-        );
-        values.push(updatedBy ? String(updatedBy) : null, String(guildId), Number(expectedRevision));
+        const channels = { ...current.channels };
+        for (const [key, value] of Object.entries(patch.channels ?? {})) {
+            if (!CHANNEL_KEYS.includes(key)) throw new Error(`Unknown logging channel setting: ${key}`);
+            channels[key] = normalizeOptionalId(value);
+        }
+        if (Object.keys(patch.channels ?? {}).length < 1) return current;
+        const encrypted = encryptedPayload(normalizedGuildId, channels, updatedBy);
         const result = await database.query(
-            `UPDATE ${tableName} SET ${assignments.join(', ')}
-             WHERE guild_id = ? AND settings_revision = ?`,
-            values,
+            `UPDATE ${tableName}
+             SET key_version = ?, payload_nonce = ?, payload_tag = ?, encrypted_payload = ?,
+                 settings_revision = settings_revision + 1, updated_at = CURRENT_TIMESTAMP
+             WHERE guild_lookup = ? AND settings_revision = ?`,
+            [...encrypted, lookup(normalizedGuildId), normalizeRevision(expectedRevision)],
         );
         if (result?.affectedRows !== 1) {
             const error = new Error('Logging settings were changed by another administrator. Reopen the panel and try again.');
             error.code = 'LOGGING_SETTINGS_CONFLICT';
             throw error;
         }
-        return read(guildId);
+        return read(normalizedGuildId);
     }
 
     return Object.freeze({ ensureSchema, read, seed, update });
 }
 
 module.exports = {
-    CHANNEL_COLUMNS,
+    CHANNEL_KEYS,
     createLoggingSettingsRepository,
 };

@@ -110,7 +110,7 @@ function resolveBotLogDestination({ guildId, logType }) {
         return guildId ? null : undefined;
     }
     const settings = getCached(guildId);
-    if (!settings) return undefined;
+    if (!settings) return null;
     const channelKey = LOG_TYPE_CHANNEL_KEYS[logType] ?? 'general';
     return settings.channels[channelKey];
 }
@@ -142,9 +142,7 @@ function getLeaderboardApprovalChannelId(guildId) {
         return null;
     }
     const settings = getCached(guildId);
-    return settings
-        ? settings.channels.approvals
-        : normalizeChannelId(process.env.STAFFCHANNELID);
+    return settings?.channels.approvals ?? null;
 }
 
 module.exports = {

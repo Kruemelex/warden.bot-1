@@ -139,7 +139,6 @@ function mainOperation(){
 	bot.once(Discord.Events.ClientReady, async() => {
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Login Process Completed:".magenta,`✅`)
 		await botFunc.deployCommands(commandsColl,REST,Routes,bot)
-		botFunc.botLog(bot,new Discord.EmbedBuilder().setDescription(`💡 ${bot.user.username} online! logged in as ${bot.user.tag}\n - Cache cleared`).setTitle(`${bot.user.username} Online`),0);
 		const configuredGuildId = process.env.GUILDID || botFunc.botIdent().activeBot.guildId
 		const guild = bot.guilds.cache.get(configuredGuildId) ?? bot.guilds.cache.first()
 		global.guild = guild
@@ -152,6 +151,8 @@ function mainOperation(){
 				guildId: configuredGuildId,
 			})
 			logConsoleStartupStatus(activeBotName, 'Logging Settings', '✅')
+			void botFunc.botLog(bot,new Discord.EmbedBuilder().setDescription(`💡 ${bot.user.username} online! logged in as ${bot.user.tag}\n - Cache cleared`).setTitle(`${bot.user.username} Online`),0)
+				.catch((error) => console.error(error));
 		}
 		catch (err) {
 			logConsoleStartupStatus(activeBotName, 'Logging Settings', '❌', { failed: true })
