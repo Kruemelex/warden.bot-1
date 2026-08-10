@@ -3,6 +3,35 @@ const Discord = require('discord.js')
 const database = require(`../${botIdent().activeBot.botName}/db/database`)
 const config = require('../config.json')
 
+const MESSAGE_FIELD_CONTENT_LIMIT = 1000
+
+function neutralizeCodeFences(value) {
+    const text = typeof value === 'string' ? value : String(value || '')
+    return text.replace(/`{3,}/g, match => match.slice(0, 2) + '\u200b' + match.slice(2))
+}
+
+function wrapCodeBlock(content) {
+    return `\`\`\`\n${content}\n\`\`\``
+}
+
+function chunkText(value, limit) {
+    const text = typeof value === 'string' ? value : String(value || '')
+    if (!text) return ['']
+
+    const chunks = []
+    for (let index = 0; index < text.length; index += limit) {
+        chunks.push(text.slice(index, index + limit))
+    }
+    return chunks
+}
+
+function buildCopyableMessageFields(label, content) {
+    return chunkText(neutralizeCodeFences(content), MESSAGE_FIELD_CONTENT_LIMIT).map((chunk, index) => ({
+        name: index === 0 ? label : `${label} (cont. ${index + 1})`,
+        value: wrapCodeBlock(chunk),
+    }))
+}
+
 
 //xsf stuff
 let saveBulkMessages
@@ -202,7 +231,7 @@ const exp = {
             }
         }
     },
-    guildMemberAdd: async (interaction, bot) => {
+    guildMemberAdd: async (member, bot) => {
         if (process.env.MODE == 'testServer') {
              // The role IDs or names you want to assign
             const rolesToAssign = ['test person', 'Learner']; // Replace with the actual role IDs or names
@@ -893,6 +922,7 @@ const exp = {
         }
     },
     messageDelete: async (message) => {
+        const authorId = message.author?.id
         try {
             let deletedBy = null
             const fetchedLogs = await message.guild.fetchAuditLogs({
@@ -902,18 +932,18 @@ const exp = {
             const deletionLog = fetchedLogs.entries.first()
             if (!deletionLog) {
                 // console.log(`${message.author.tag} deleted their own message.`)
-                deletedBy = message.author
+                deletedBy = message.author ?? 'Unknown'
                 sendEmbed(deletedBy)
                 return
             }
             const { executor, target, createdTimestamp } = deletionLog
-            if (target.id !== message.author.id || Date.now() - createdTimestamp > 5000) {
-                console.log(`${message.author.tag} deleted their own message.`)
-                deletedBy = message.author
+            if (!authorId || target.id !== authorId || Date.now() - createdTimestamp > 5000) {
+                if (message.author?.tag) console.log(`${message.author.tag} deleted their own message.`)
+                deletedBy = message.author ?? 'Unknown'
                 sendEmbed(deletedBy)
                 return
             }
-            if (executor.id === message.author.id) {
+            if (executor.id === authorId) {
                 console.log(`${executor.tag} (a mod) deleted their own message.`)
                 deletedBy = executor
                 sendEmbed(deletedBy)
@@ -923,24 +953,25 @@ const exp = {
                 sendEmbed(deletedBy)
             }
             function sendEmbed(deletedBy) {
-                
-                if (message.author.id == null) {
-                    // console.log("4".cyan)
-                    deletedBy = "Cache Empty"
-                }
-                const messageAuthor = 
-                    message.author != null
-                    ? message.author
-                    : "Cache Empty"
-                const messageContent = 
+                const messageContent =
                     message.content != null
-                    ? message.content.replace(/`/g, "")
+                    ? message.content
                     : "Cache Empty"
-                
+
+                const deletedByValue = deletedBy?.id ? `<@${deletedBy.id}>` : String(deletedBy ?? 'Unknown')
+                const authorValue = authorId ? `<@${authorId}>` : 'Unknown'
+                const deletedEmbed = new Discord.EmbedBuilder()
+                    .setTitle(`Message Deleted 🗑️`)
+                    .addFields(
+                        { name: 'By User', value: deletedByValue },
+                        { name: 'Author', value: authorValue },
+                        ...buildCopyableMessageFields('Message', messageContent),
+                    )
                 botLog(message.guild,
-                new Discord.EmbedBuilder()
-                    .setDescription(`Deleted By: ${deletedBy}\n` + '- Author: ' + `${messageAuthor}\n` +  `- Messsage\`\`\`${messageContent}\`\`\``)
-                    .setTitle(`Message Deleted 🗑️`),1)
+                    deletedEmbed,
+                    1,
+                    'messages',
+                )
             }
         } catch (error) {
             console.error("Error fetching audit logs:", error)
@@ -969,79 +1000,6 @@ const exp = {
             const rawNew = typeof newMessage?.content === 'string' ? newMessage.content : ''
             if (rawOld === rawNew) return
 
-            function neutralizeCodeFences(s) {
-            if (typeof s !== 'string') return ''
-            // break any run of 3+ backticks so it cannot form a code fence
-            return s.replace(/`{3,}/g, m => m.slice(0, 2) + '\u200b' + m.slice(2))
-            }
-
-            function wrapCodeBlock(content) {
-            content = typeof content === 'string' ? content : String(content || '')
-            return `\`\`\`\n${content}\n\`\`\``
-            }
-
-            const DESC_LIMIT = 3900 // safe headroom under 4096
-
-            function chunkText(s, limit) {
-            s = typeof s === 'string' ? s : String(s || '')
-            if (!s) return ['']
-
-            const out = []
-            let i = 0
-            while (i < s.length) {
-                out.push(s.slice(i, i + limit))
-                i += limit
-            }
-            return out
-            }
-
-            function buildEmbedsFromChunks(title, headerLine, contentStr, footerLine) {
-            const embeds = []
-
-            const header = headerLine ? headerLine + '\n' : ''
-            const footer = footerLine ? '\n' + footerLine : ''
-
-            const bodyChunks = chunkText(contentStr, 3000) 
-
-            for (let idx = 0; idx < bodyChunks.length; idx++) {
-                const isLast = idx === bodyChunks.length - 1
-
-                const desc =
-                header +
-                wrapCodeBlock(bodyChunks[idx]) +
-                (isLast ? footer : '')
-
-                
-                if (desc.length > DESC_LIMIT) {
-                let chunk = bodyChunks[idx]
-                while (chunk.length > 0) {
-                    const trial =
-                    header +
-                    wrapCodeBlock(chunk) +
-                    (isLast ? footer : '')
-                    if (trial.length <= DESC_LIMIT) {
-                    embeds.push(
-                        new Discord.EmbedBuilder()
-                        .setTitle(idx === 0 ? title : `${title} (cont. ${idx + 1})`)
-                        .setDescription(trial)
-                    )
-                    break
-                    }
-                    chunk = chunk.slice(0, chunk.length - 100)
-                }
-                continue
-                }
-
-                embeds.push(
-                new Discord.EmbedBuilder()
-                    .setTitle(idx === 0 ? title : `${title} (cont. ${idx + 1})`)
-                    .setDescription(desc)
-                )
-            }
-
-            return embeds
-            }
-
             let oldContent = neutralizeCodeFences(
             typeof oldMessage?.content === 'string' ? oldMessage.content : ''
             )
@@ -1052,23 +1010,29 @@ const exp = {
             if (!newContent) newContent = 'No new content.'
             if (!oldMessage || oldMessage.partial || !oldContent) oldContent = 'Bot: Cache Unvailable'
 
-            const header = `Message updated by user: ${newMessage.author}`
-            const footer = `Message Link: ${newMessage.url}`
-
-            const oldEmbeds = buildEmbedsFromChunks('Message Updated 📝', header + '\nOld Message', oldContent, '')
-            const newEmbeds = buildEmbedsFromChunks('Message Updated 📝', 'New Message', newContent, footer)
+            const fields = [{ name: 'By User', value: `<@${newMessage.author.id}>` }]
+            const oldEmbeds = [new Discord.EmbedBuilder()
+                .setTitle('Message Updated 📝')
+                .addFields(...fields, ...buildCopyableMessageFields('Old Message', oldContent))]
+            const newEmbeds = [new Discord.EmbedBuilder()
+                .setTitle('Message Updated 📝')
+                .addFields(
+                    ...fields,
+                    ...buildCopyableMessageFields('New Message', newContent),
+                    { name: 'Message Link', value: newMessage.url },
+                )]
 
             // Send them in order
             for (const e of oldEmbeds) {
-            botLog(bot, e, 3, 'messages')
+            botLog(newMessage.guild, e, 3, 'messages')
             }
             for (const e of newEmbeds) {
-            botLog(bot, e, 3, 'messages')
+            botLog(newMessage.guild, e, 3, 'messages')
             }
         } 
         catch (err) {
             botLog(
-            bot,
+            newMessage?.guild ?? oldMessage?.guild ?? bot,
             new Discord.EmbedBuilder()
                 .setTitle('⛔ Error Handling messageUpdate() in simpleEvents.js')
                 .setDescription('```' + (err?.stack || String(err)) + '```'),
@@ -1080,14 +1044,15 @@ const exp = {
     guildMemberRemove: async (member, bot) => { 
         let roles = ``
         member.roles.cache.each(role => roles += `${role}\n`)
-        botLog(bot,new Discord.EmbedBuilder()
-        .setDescription(`User ${member.user.tag}(${member.displayName}) has left or was kicked from the server.`)
+        botLog(member.guild,new Discord.EmbedBuilder()
+        .setDescription(`User ${member.user.tag} (${member.displayName}) has left or was kicked from the server.`)
         .setTitle(`User Left/Kicked from Server`)
         .addFields(
-            { name: `ID`, value: `${member.id}`},
+            { name: `User`, value: `${member.user}` },
+            { name: `ID`, value: `\`\`\`${member.id}\`\`\``},
             { name: `Date Joined`, value: `<t:${(member.joinedTimestamp/1000) >> 0}:F>`},
             { name: `Roles`, value: `${roles}`},
-        ),2)
+        ),2,'users')
     },
     guildMemberAdd: async (member, bot) => {
         let roles = ``;
@@ -1096,9 +1061,7 @@ const exp = {
         const joinDate = new Date(member.joinedTimestamp)
         const accountAge = joinDate - accountCreationDate
         const oneDay = 24 * 60 * 60 * 1000
-        let violator = `\`\`\`No\`\`\``;
         if (accountAge <= oneDay) {
-            violator = `\`\`\`Yes\`\`\``
             console.log("new join",
                 "Account ID:",member.user.id,
                 "Name:",member.user.displayName,
@@ -1106,52 +1069,26 @@ const exp = {
                 "Join Date:",joinDate,
                 "Account Age:",accountAge,
                 "OneDay:",oneDay)
-            if (botIdent().activeBot.botName == "Warden") {
-                const onion = await guild.members.fetch('346415786505666560') // Mr Onion
-                const embed = new Discord.EmbedBuilder()
-                    .setDescription(`User ${member.user.tag} (${member.displayName})`)
-                    .setTitle(`Charcter Information`)
-                    .addFields(
-                        { name: `User`, value: `${member.user}` },
-                        { name: `Within 24 hour?`, value: `${violator}`},
-                        { name: `ID`, value: `\`\`\`${member.id}\`\`\`` },
-                        { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
-                        { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
-                    )
-                // await onion.send({ embeds: [embed] })
-                try {
-                    botLog(bot, new Discord.EmbedBuilder()
-                        .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
-                        .setTitle(`New Account Joined Server`)
-                        .addFields(
-                            { name: `User`, value: `${member.user}` },
-                            { name: `ID`, value: `\`\`\`${member.id}\`\`\`` },
-                            { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
-                            { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
-                            { name: `Roles`, value: roles || "No roles" },
-                        ), 2, "alert"
-                    )
-                }
-                catch (e) {
-                    console.log(e)
-                    botLog(bot, new Discord.EmbedBuilder()
-                        .setDescription(`Couldn't post to #alerts.`)
-                        .setTitle(`New account created within 24 hours and has joined the server.`)
-                        , 2, "error"
-                    )
-                }
-            }
-            if (botIdent().activeBot.botName == "GuardianAI") {
-                botLog(bot, new Discord.EmbedBuilder()
+            try {
+                await botLog(member.guild, new Discord.EmbedBuilder()
                     .setDescription(`User ${member.user.tag} (${member.displayName}) is a new account and joined the server within 24 hours.`)
                     .setTitle(`New Account Joined Server`)
                     .addFields(
                         { name: `User`, value: `${member.user}` },
-                        { name: `ID`, value: { name: `ID`, value: `\`\`\`${member.id}\`\`\`` }, },
+                        { name: `ID`, value: `\`\`\`${member.id}\`\`\`` },
                         { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
                         { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
                         { name: `Roles`, value: roles || "No roles" },
-                    ), 2, "staff"
+                    ), 2, 'users'
+                )
+            }
+            catch (error) {
+                console.log(error)
+                await botLog(member.guild, new Discord.EmbedBuilder()
+                    .setDescription(`Couldn't post the new-account report.`)
+                    .setTitle(`New account created within 24 hours and has joined the server.`),
+                    2,
+                    "error",
                 )
             }
         }

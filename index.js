@@ -65,6 +65,7 @@ const Discord = require("discord.js")
 const { REST } = require('@discordjs/rest')
 const { Routes } = require('discord-api-types/v10')
 const botFunc = require('./functions.js')
+const { logConsoleStartupStatus } = require('./consoleReporting')
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path')
@@ -135,15 +136,30 @@ function mainOperation(){
 	 */
 	let commandsColl = bot.commands = new Discord.Collection()
 
-	bot.once("ready", async() => {
+	bot.once(Discord.Events.ClientReady, async() => {
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Login Process Completed:".magenta,`✅`)
 		await botFunc.deployCommands(commandsColl,REST,Routes,bot)
 		botFunc.botLog(bot,new Discord.EmbedBuilder().setDescription(`💡 ${bot.user.username} online! logged in as ${bot.user.tag}\n - Cache cleared`).setTitle(`${bot.user.username} Online`),0);
-		global.guild = bot.guilds.cache.first()
+		const configuredGuildId = process.env.GUILDID || botFunc.botIdent().activeBot.guildId
+		const guild = bot.guilds.cache.get(configuredGuildId) ?? bot.guilds.cache.first()
+		global.guild = guild
+		const activeBotName = botFunc.botIdent().activeBot.botName
+		const activeDatabase = require(`./${activeBotName}/db/database`)
+		const loggingSettings = require('./loggingSettings')
+		try {
+			await loggingSettings.initializeLoggingSettings({
+				guild,
+				guildId: configuredGuildId,
+			})
+			logConsoleStartupStatus(activeBotName, 'Logging Settings', '✅')
+		}
+		catch (err) {
+			logConsoleStartupStatus(activeBotName, 'Logging Settings', '❌', { failed: true })
+			console.error(err)
+		}
         
-		if (botFunc.botIdent().activeBot.botName == 'GuardianAI') {
-			const database = require(`./${botFunc.botIdent().activeBot.botName}/db/database`)
-			guardianai_vars = database
+		if (activeBotName == 'GuardianAI') {
+			guardianai_vars = activeDatabase
 			if (process.env.MODE == "PROD") {
 				//Assigns the ActivityType (status) of the bot with the system name.
 				carrierJumpRedisplay()
@@ -158,111 +174,21 @@ function mainOperation(){
 				}
 			}
 		} 
-		if (botFunc.botIdent().activeBot.botName == 'Warden') {
-			const database = await require(`./${botFunc.botIdent().activeBot.botName}/db/database`)
+		if (activeBotName == 'Warden') {
+			const database = activeDatabase
 			warden_vars = database
 
 			if(process.env.MODE == "PROD") {
-				const evaluateMessageUpdate = 1
-				const leaderboards = ['speedrun','ace']
-				leaderboards.forEach(i => { processLeaderboardWithDelay(i) })
-				let processedLeaderboard = 0
-				async function processLeaderboardWithDelay(leaderboard) {
-					try {
-						let unapproved_array = []
-						const unapproved_list_values = false
-						const unapproved_list_sql = `SELECT id,embed_id FROM ${leaderboard} WHERE approval = (?)`
-						const unapproved_list_response = await database.query(unapproved_list_sql, unapproved_list_values)
-						if (unapproved_list_response.length > 0) {
-							unapproved_array = unapproved_list_response
-							const intervalTime = evaluateMessageUpdate == 1 ? 3500 : 10
-							
-							for (const dbInfo of unapproved_array) {
-								processedLeaderboard++
-								await processLeaderboard(dbInfo, intervalTime, leaderboard, unapproved_array, processedLeaderboard)
-								await new Promise(resolve => setTimeout(resolve, intervalTime))
-							}
-						}
-					}
-					catch (err) {
-						console.log(err)
-						botFunc.botLog(guild,new Discord.EmbedBuilder()
-							.setDescription('```' + err.stack + '```')
-							.setTitle(`⛔ Fatal error experienced. processLeaderboardWithDelay(${leaderboard})`)
-							,2
-							,'error'
-						)
-						return
-					}
+				try {
+					const { reconcilePendingLeaderboardApprovals } = require('./commands/Warden/leaderboards/staffApproval/reconciliation')
+					await reconcilePendingLeaderboardApprovals(guild)
 				}
-				async function processLeaderboard(dbInfo, intervalTime, leaderboard, unapproved_array, processedLeaderboard) {
-					const staffChannel = process.env.STAFFCHANNELID
-					const staffChannel_obj = await guild.channels.fetch(staffChannel)
-					let messagesLeft = unapproved_array.length - processedLeaderboard
-					let secondsRemaining = (messagesLeft * intervalTime) / 1000
-					let minutesRemaining = (secondsRemaining / 60).toFixed(2)
-					console.log(`Processed leaderboard message: ${leaderboard}`.green, dbInfo, minutesRemaining)
-					try {
-						const originalMessage = await staffChannel_obj.messages.fetch(dbInfo.embed_id)
-						const receivedEmbed = originalMessage.embeds[0]
-						let oldEmbedSchema = {
-							title: receivedEmbed.title,
-							description: receivedEmbed.description,
-							color: receivedEmbed.color,
-							fields: receivedEmbed.fields
-						} 
-						const newEmbed = new Discord.EmbedBuilder()
-							.setTitle(oldEmbedSchema.title)
-							.setDescription(oldEmbedSchema.description)
-							.setColor(oldEmbedSchema.color)
-							.setThumbnail(botFunc.botIdent().activeBot.icon)  
-						oldEmbedSchema.fields.forEach(i => {
-							newEmbed.addFields({name: i.name, value: i.value, inline: true},)
-						})
-						const row = new Discord.ActionRowBuilder()
-							.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-approve-${dbInfo.id}`).setLabel('Approve').setStyle(Discord.ButtonStyle.Success),)
-							.addComponents(new Discord.ButtonBuilder().setCustomId(`submission-${leaderboard}-deny-${dbInfo.id}`).setLabel('Delete').setStyle(Discord.ButtonStyle.Danger),)
-						const editedEmbed = Discord.EmbedBuilder.from(newEmbed)
-						let buttonResult = null;
-						buttonResult = await originalMessage.edit({ embeds: [editedEmbed], components: [row] })
-						
-						try {
-							const submissionUpdate_values = [dbInfo.embed_id,dbInfo.id]
-							const submissionUpdate_sql = `UPDATE ${leaderboard} SET embed_id = (?) WHERE id = (?);`
-							await database.query(submissionUpdate_sql, submissionUpdate_values)
-						} catch (err) {
-							console.log(err)
-							botFunc.botLog(guild,new Discord.EmbedBuilder()
-								.setDescription('```' + err.stack + '```')
-								.setTitle(`⛔ Fatal error experienced. processLeaderboard(${leaderboard})`)
-								,2
-								,'error'
-							)
-						}
-						if (processedLeaderboard == unapproved_array.length) { 
-							setTimeout(() => {
-								console.log(`Processed ${leaderboard} Messages Completed`.cyan)
-								processedLeaderboard == 0
-								// interaction.editReply(
-								// 	{
-								// 		content: `Tag Correction Completed. Reviewed **${guildMemberCount}** Users.`, 
-								// 		embeds: [], 
-								// 		flags: Discord.MessageFlags.Ephemeral, 
-								// 	}
-								// ).catch(console.error)
-							},3500)
-						}
-					}
-					catch (err) {
-						console.log(err)
-						botFunc.botLog(guild,new Discord.EmbedBuilder()
-							.setDescription('```' + err.stack + '```')
-							.setTitle(`⛔ Fatal error experienced: checkLeaderboards(${leaderboard})`)
-							,2
-							,'error'
-						)
-						return
-					}
+				catch (err) {
+					console.error('Leaderboard reconciliation failed:', err)
+					void Promise.resolve(botFunc.botLog(guild, new Discord.EmbedBuilder()
+						.setDescription('```' + err.stack + '```')
+						.setTitle('⛔ Fatal error experienced: reconcilePendingLeaderboards()'), 2, 'error'))
+						.catch((logError) => console.error('Failed to log Leaderboard reconciliation error:', logError))
 				}
 
 				// Scheduled Role Backup Task
@@ -296,8 +222,8 @@ function mainOperation(){
 				// 		console.log(err);
 				// 	}
 				// }, the_interval);
+				}
 			}
-		}
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Bot has Loaded In:".magenta,'✅');
 	})
 	if (process.env.MODE != "PROD") {

@@ -53,9 +53,8 @@ module.exports = {
                 { name: `Date Account Created`, value: `<t:${Math.floor(accountCreationDate.getTime() / 1000)}:F>` },
                 { name: `Date Joined`, value: `<t:${Math.floor(joinDate.getTime() / 1000)}:F>` },
                 { name: `Roles`, value: roles || "No roles" },
-            ), 2, "alert"
+            ), 2, 'users'
         )
         interaction.editReply({ content: "Data sent to Mr Onion" })
     }
 }
-
