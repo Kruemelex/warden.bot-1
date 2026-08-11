@@ -1,6 +1,5 @@
 'use strict';
 
-const { isLeaderboardMigrationMode } = require('../db/leaderboards/migrationGuard');
 const settings = require('./settings');
 
 function maintenanceError() {
@@ -19,18 +18,12 @@ function submissionHaltedError(type) {
 
 function isLeaderboardAvailabilityError(error) {
     return [
-        'LEADERBOARD_MIGRATION_MODE',
         'LEADERBOARD_MAINTENANCE_MODE',
         'LEADERBOARD_SUBMISSIONS_HALTED',
     ].includes(error?.code);
 }
 
 async function assertLeaderboardMutationAllowed(guildId) {
-    if (isLeaderboardMigrationMode()) {
-        const error = new Error('Leaderboards are temporarily unavailable during encrypted-data migration.');
-        error.code = 'LEADERBOARD_MIGRATION_MODE';
-        throw error;
-    }
     const current = await settings.get(guildId);
     if (current.mode === 'maintenance') throw maintenanceError();
     return current;

@@ -19,7 +19,6 @@ const { createKeyedOperationQueue } = require('./keyedOperations');
 const { createLeaderboardEditorDocument } = require('./panel');
 const repository = require('../../../../Warden/db/leaderboards/repository');
 const { getLeaderboard, getSubmissionId } = repository;
-const { isLeaderboardMigrationMode } = require('../../../../Warden/db/leaderboards/migrationGuard');
 const { assertLeaderboardMutationAllowed } = require('../../../../Warden/leaderboards/policy');
 const { publishApprovedSubmission } = require('../../../../Warden/leaderboards/websitePublisher');
 
@@ -450,10 +449,6 @@ function parseApprovalCustomId(customId) {
 async function handleLeaderboardInteraction(interaction) {
     const approvalAction = interaction.isButton?.() && parseApprovalCustomId(interaction.customId);
     if (approvalAction) {
-        if (isLeaderboardMigrationMode()) {
-            await respondEphemeral(interaction, '⏳ Leaderboard Staff actions are temporarily unavailable during maintenance.');
-            return true;
-        }
         if (approvalAction.action === 'edit') {
             await openEditor(interaction, approvalAction.leaderboard, approvalAction.submissionId);
         }

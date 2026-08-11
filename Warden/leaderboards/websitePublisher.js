@@ -4,7 +4,6 @@ const crypto = require('node:crypto');
 const https = require('node:https');
 const { URL } = require('node:url');
 const { createConsoleReporter } = require('../../consoleReporting');
-const { isLeaderboardMigrationMode } = require('../db/leaderboards/migrationGuard');
 const { listAceBoard, listSpeedrunBoard } = require('../db/leaderboards/repository');
 const settings = require('./settings');
 const settingsRepository = require('./settingsRepository');
@@ -122,6 +121,17 @@ function publicAceEntry(row) {
     };
 }
 
+function uniqueUsers(rows) {
+    const seen = new Set();
+    return rows.filter((row) => {
+        const userId = String(row.user_id ?? '');
+        if (!userId) return true;
+        if (seen.has(userId)) return false;
+        seen.add(userId);
+        return true;
+    });
+}
+
 async function buildSnapshot(guildId, request, revision) {
     const normalized = normalizeRequest(request);
     const speedrunBoards = normalized.full ? SPEEDRUN_BOARDS : normalized.speedrun;
@@ -132,14 +142,14 @@ async function buildSnapshot(guildId, request, revision) {
         boards.speedrun[speedrunKey(board)] = {
             variant: board.variant,
             shipClass: board.shipClass,
-            entries: rows.slice(0, MAX_ENTRIES_PER_BOARD).map(publicSpeedrunEntry),
+            entries: uniqueUsers(rows).slice(0, MAX_ENTRIES_PER_BOARD).map(publicSpeedrunEntry),
         };
     }
     for (const shiptype of aceBoards) {
-        const rows = await listAceBoard(shiptype, { limit: MAX_ENTRIES_PER_BOARD });
+        const rows = await listAceBoard(shiptype, { limit: null });
         boards.ace[shiptype] = {
             shiptype,
-            entries: rows.slice(0, MAX_ENTRIES_PER_BOARD).map(publicAceEntry),
+            entries: uniqueUsers(rows).slice(0, MAX_ENTRIES_PER_BOARD).map(publicAceEntry),
         };
     }
     return {
@@ -195,11 +205,6 @@ function sendSignedPayload(config, payload) {
 }
 
 async function publishRequest(guildId, request, { force = false, reason = 'automatic' } = {}) {
-    if (isLeaderboardMigrationMode()) {
-        const error = new Error('Leaderboard website publishing is unavailable during encrypted-data migration.');
-        error.code = 'LEADERBOARD_MIGRATION_MODE';
-        throw error;
-    }
     const config = requiredEnvironment();
     if (!config) {
         const error = new Error('Leaderboard website publishing is not configured. Set AXI_LEADERBOARDS_SYNC_URL, AXI_LEADERBOARDS_SYNC_KEY_ID, and AXI_LEADERBOARDS_SYNC_SECRET.');

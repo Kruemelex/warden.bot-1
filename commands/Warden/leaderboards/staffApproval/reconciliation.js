@@ -8,7 +8,6 @@ const {
     setApprovalMessageId,
 } = require('../../../../Warden/db/leaderboards/repository');
 const { buildApprovalMessage } = require('../leaderboardApprovalMessages');
-const { isLeaderboardMigrationMode } = require('../../../../Warden/db/leaderboards/migrationGuard');
 
 const RECONCILIATION_INTERVAL_MS = 3500;
 const activeReconciliations = new Map();
@@ -49,7 +48,6 @@ async function reportReconciliationError(guild, type, submission, error) {
 }
 
 async function reconcilePendingLeaderboardApprovalsNow(guild) {
-    if (isLeaderboardMigrationMode()) return { reconciled: 0, skipped: 'migration-mode' };
     const channelId = getLeaderboardApprovalChannelId(guild.id);
     if (!channelId) return { reconciled: 0 };
     const channel = await guild.channels.fetch(channelId);
