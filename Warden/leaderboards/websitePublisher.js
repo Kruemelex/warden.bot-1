@@ -121,6 +121,17 @@ function publicAceEntry(row) {
     };
 }
 
+function uniqueUsers(rows) {
+    const seen = new Set();
+    return rows.filter((row) => {
+        const userId = String(row.user_id ?? '');
+        if (!userId) return true;
+        if (seen.has(userId)) return false;
+        seen.add(userId);
+        return true;
+    });
+}
+
 async function buildSnapshot(guildId, request, revision) {
     const normalized = normalizeRequest(request);
     const speedrunBoards = normalized.full ? SPEEDRUN_BOARDS : normalized.speedrun;
@@ -131,14 +142,14 @@ async function buildSnapshot(guildId, request, revision) {
         boards.speedrun[speedrunKey(board)] = {
             variant: board.variant,
             shipClass: board.shipClass,
-            entries: rows.slice(0, MAX_ENTRIES_PER_BOARD).map(publicSpeedrunEntry),
+            entries: uniqueUsers(rows).slice(0, MAX_ENTRIES_PER_BOARD).map(publicSpeedrunEntry),
         };
     }
     for (const shiptype of aceBoards) {
-        const rows = await listAceBoard(shiptype, { limit: MAX_ENTRIES_PER_BOARD });
+        const rows = await listAceBoard(shiptype, { limit: null });
         boards.ace[shiptype] = {
             shiptype,
-            entries: rows.slice(0, MAX_ENTRIES_PER_BOARD).map(publicAceEntry),
+            entries: uniqueUsers(rows).slice(0, MAX_ENTRIES_PER_BOARD).map(publicAceEntry),
         };
     }
     return {

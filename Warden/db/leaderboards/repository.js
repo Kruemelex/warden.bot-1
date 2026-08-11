@@ -166,9 +166,11 @@ async function listAceBoard(shiptype, { limit = 10 } = {}) {
         `SELECT * FROM ${TABLES.ace} WHERE shiptype_lookup = ? AND approval = 1`,
         [lookup('ace', 'shiptype', shiptype)],
     );
-    return (rows ?? []).map((row) => decodeRow('ace', row))
-        .sort((left, right) => Number(right.score) - Number(left.score) || left.id - right.id)
-        .slice(0, Number.isSafeInteger(limit) && limit > 0 ? limit : 10);
+    const sorted = (rows ?? []).map((row) => decodeRow('ace', row))
+        .sort((left, right) => Number(right.score) - Number(left.score) || left.id - right.id);
+    return limit === null
+        ? sorted
+        : sorted.slice(0, Number.isSafeInteger(limit) && limit > 0 ? limit : 10);
 }
 
 async function findSpeedrunBest(userId, variant, shipClass) {
