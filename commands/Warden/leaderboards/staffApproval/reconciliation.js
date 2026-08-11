@@ -3,6 +3,7 @@
 const Discord = require('discord.js');
 const { botLog } = require('../../../../functions');
 const { getLeaderboardApprovalChannelId } = require('../../../../loggingSettings/service');
+const { retryTransientDatabaseOperation } = require('../../../../Warden/db/errorPolicy');
 const {
     listPendingSubmissions,
     setApprovalMessageId,
@@ -47,6 +48,18 @@ async function reportReconciliationError(guild, type, submission, error) {
     ).catch((logError) => console.error('Failed to log Leaderboard reconciliation error:', logError));
 }
 
+async function reportReconciliationListError(guild, type, error) {
+    console.error(`Leaderboard reconciliation could not load ${type} submissions after retry:`, error);
+    await botLog(
+        guild,
+        new Discord.EmbedBuilder()
+            .setDescription(`\`\`\`${error.stack}\`\`\``)
+            .setTitle(`⛔ Fatal error experienced: listPendingLeaderboards(${type})`),
+        2,
+        'error',
+    ).catch((logError) => console.error('Failed to log Leaderboard reconciliation error:', logError));
+}
+
 async function reconcilePendingLeaderboardApprovalsNow(guild) {
     const channelId = getLeaderboardApprovalChannelId(guild.id);
     if (!channelId) return { reconciled: 0 };
@@ -54,7 +67,16 @@ async function reconcilePendingLeaderboardApprovalsNow(guild) {
     let reconciled = 0;
 
     for (const type of ['speedrun', 'ace']) {
-        const submissions = await listPendingSubmissions(type);
+        let submissions;
+        try {
+            ({ value: submissions } = await retryTransientDatabaseOperation(
+                () => listPendingSubmissions(type),
+            ));
+        }
+        catch (error) {
+            await reportReconciliationListError(guild, type, error);
+            continue;
+        }
         for (let index = 0; index < submissions.length; index += 1) {
             const submission = submissions[index];
             try {
