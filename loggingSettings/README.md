@@ -21,4 +21,11 @@ GUARDIANAI_DATA_LOOKUP_KEY=<different Base64 32-byte key>
 ```
 
 The active encryption key version can be advanced when a matching versioned key
-is changed accordingly.
+is deployed. Keep every historical encryption key configured until every row has
+been read and rewritten with the new active version and that result has been
+verified; changing the active version alone does not rotate untouched rows. The
+lookup key must remain stable while existing settings rows are in use.
+
+This schema is the initial production shape. It intentionally has no plaintext
+compatibility or automatic migration path; an existing plaintext table with the
+same name must be migrated separately before deploying this version.
