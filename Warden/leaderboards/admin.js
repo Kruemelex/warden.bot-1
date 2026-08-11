@@ -17,7 +17,6 @@ const {
     buildModalStringSelectField,
     getRequiredModalSingleSelect,
 } = require('../../ux/components/modalFields');
-const { isLeaderboardMigrationMode } = require('../db/leaderboards/migrationGuard');
 const settings = require('./settings');
 const { requestWebsiteSync } = require('./websitePublisher');
 const { reconcilePendingLeaderboardApprovals } = require('../../commands/Warden/leaderboards/staffApproval/reconciliation');
@@ -221,7 +220,6 @@ async function syncWebsite(interaction) {
 
 async function reconcilePosts(interaction) {
     await interaction.deferUpdate();
-    if (isLeaderboardMigrationMode()) throw new Error('Approval-post refresh is unavailable during encrypted-data migration.');
     const result = await reconcilePendingLeaderboardApprovals(interaction.guild);
     return interaction.followUp({
         content: `✅ Approval-post refresh completed${result.reconciled ? ` (${result.reconciled} pending post${result.reconciled === 1 ? '' : 's'})` : ''}.`,

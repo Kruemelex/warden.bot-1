@@ -14,7 +14,6 @@ const {
     retryTransientDatabaseOperation,
 } = require('../errorPolicy');
 const { runLeaderboardTransaction } = require('./transaction');
-const { assertLeaderboardWritesAllowed } = require('./migrationGuard');
 
 const PAYLOAD_FIELDS = Object.freeze({
     speedrun: Object.freeze([
@@ -89,7 +88,6 @@ async function initializeLeaderboards() {
 }
 
 async function insertSubmission(type, submission, { sourceId = null } = {}) {
-    assertLeaderboardWritesAllowed();
     const normalizedType = getType(type);
     await initializeLeaderboards();
     const encrypted = encryptedColumns(normalizedType, submission);
@@ -196,7 +194,6 @@ async function findAceApproved(userId) {
 }
 
 async function updatePayload(type, id, mutate, { requirePending = false } = {}) {
-    assertLeaderboardWritesAllowed();
     const normalizedType = getType(type);
     const current = await loadSubmission(normalizedType, id);
     if (!current || (requirePending && current.approval !== 0)) return undefined;
@@ -225,9 +222,25 @@ async function updatePayload(type, id, mutate, { requirePending = false } = {}) 
 }
 
 async function setApprovalMessageId(type, id, messageId) {
-    return updatePayload(type, id, () => ({ embed_id: messageId == null ? null : String(messageId) }), {
-        requirePending: true,
-    });
+    const expectedMessageId = messageId == null ? null : String(messageId);
+    try {
+        return await updatePayload(type, id, () => ({ embed_id: expectedMessageId }), {
+            requirePending: true,
+        });
+    }
+    catch (error) {
+        if (!isTransientDatabaseError(error)) throw error;
+        try {
+            const { value: current } = await retryTransientDatabaseOperation(
+                () => loadSubmission(type, id),
+            );
+            if (current?.embed_id === expectedMessageId) return current;
+        }
+        catch {
+            // Preserve the original write error when durable state cannot be confirmed.
+        }
+        throw error;
+    }
 }
 
 function pendingError(submission) {
@@ -255,7 +268,6 @@ async function commitPendingEdits({ context: editContext, object, edits, extraVa
 }
 
 async function approvePendingSubmission(type, id) {
-    assertLeaderboardWritesAllowed();
     const normalizedType = getType(type);
     const submissionId = getSubmissionId(id);
     await initializeLeaderboards();
@@ -291,7 +303,6 @@ async function approvePendingSubmission(type, id) {
 }
 
 async function deletePendingSubmission(type, id, { expectedUserId } = {}) {
-    assertLeaderboardWritesAllowed();
     const normalizedType = getType(type);
     const submissionId = Number(id);
     const expectedLookup = expectedUserId == null

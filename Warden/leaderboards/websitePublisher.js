@@ -4,7 +4,6 @@ const crypto = require('node:crypto');
 const https = require('node:https');
 const { URL } = require('node:url');
 const { createConsoleReporter } = require('../../consoleReporting');
-const { isLeaderboardMigrationMode } = require('../db/leaderboards/migrationGuard');
 const { listAceBoard, listSpeedrunBoard } = require('../db/leaderboards/repository');
 const settings = require('./settings');
 const settingsRepository = require('./settingsRepository');
@@ -195,11 +194,6 @@ function sendSignedPayload(config, payload) {
 }
 
 async function publishRequest(guildId, request, { force = false, reason = 'automatic' } = {}) {
-    if (isLeaderboardMigrationMode()) {
-        const error = new Error('Leaderboard website publishing is unavailable during encrypted-data migration.');
-        error.code = 'LEADERBOARD_MIGRATION_MODE';
-        throw error;
-    }
     const config = requiredEnvironment();
     if (!config) {
         const error = new Error('Leaderboard website publishing is not configured. Set AXI_LEADERBOARDS_SYNC_URL, AXI_LEADERBOARDS_SYNC_KEY_ID, and AXI_LEADERBOARDS_SYNC_SECRET.');

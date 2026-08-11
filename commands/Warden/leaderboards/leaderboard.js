@@ -1,7 +1,6 @@
 const Discord = require("discord.js")
 const { botLog } = require('../../../functions');
 const { listAceBoard, listSpeedrunBoard } = require('../../../Warden/db/leaderboards/repository')
-const { isLeaderboardMigrationMode } = require('../../../Warden/db/leaderboards/migrationGuard')
 const { buildSpeedrunEmbed } = require('./leaderboardPresentation')
 const { createPersonalSpeedrunHistory } = require('./personalLeaderboardPagination')
 function timeConvertTT(timetaken) {
@@ -97,9 +96,6 @@ data: new Discord.SlashCommandBuilder()
 		const subcommand = interaction.options.getSubcommand()
 		const byMe = subcommand === 'speedrun' && interaction.options.getBoolean('by-me') === true
 		await interaction.deferReply(byMe ? { flags: Discord.MessageFlags.Ephemeral } : {});
-		if (subcommand !== 'website' && isLeaderboardMigrationMode()) {
-			return interaction.editReply({ content: '⏳ Leaderboards are temporarily unavailable during maintenance.' })
-		}
 		if (subcommand === 'website') {
 			const embed = new Discord.EmbedBuilder()
 				.setColor('#FF7100')
