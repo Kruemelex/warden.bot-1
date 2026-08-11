@@ -2,9 +2,8 @@ const Discord = require("discord.js")
 const { botLog } = require('../../../functions');
 const { listAceBoard, listSpeedrunBoard } = require('../../../Warden/db/leaderboards/repository')
 const { isLeaderboardMigrationMode } = require('../../../Warden/db/leaderboards/migrationGuard')
-function capitalizeFirstLetter(str) {
-	return str.charAt(0).toUpperCase() + str.slice(1);
-}
+const { buildSpeedrunEmbed } = require('./leaderboardPresentation')
+const { createPersonalSpeedrunHistory } = require('./personalLeaderboardPagination')
 function timeConvertTT(timetaken) {
 	const hours = Math.floor(timetaken / 3600);
 	const minutes = Math.floor((timetaken % 3600) / 60);
@@ -68,6 +67,10 @@ data: new Discord.SlashCommandBuilder()
 						{ name: 'Large', value: 'large' }
 				)
 			)
+			.addBooleanOption(option => option.setName('by-me')
+				.setDescription('Privately show all of your approved submissions in this division')
+				.setRequired(false)
+			)
 	)
 	.addSubcommand(subcommand =>
 		subcommand
@@ -91,11 +94,13 @@ data: new Discord.SlashCommandBuilder()
 	) 
 	,
 	async execute(interaction) {
-		await interaction.deferReply({ ephemeral: false });
-		if (interaction.options.getSubcommand() !== 'website' && isLeaderboardMigrationMode()) {
+		const subcommand = interaction.options.getSubcommand()
+		const byMe = subcommand === 'speedrun' && interaction.options.getBoolean('by-me') === true
+		await interaction.deferReply(byMe ? { flags: Discord.MessageFlags.Ephemeral } : {});
+		if (subcommand !== 'website' && isLeaderboardMigrationMode()) {
 			return interaction.editReply({ content: '⏳ Leaderboards are temporarily unavailable during maintenance.' })
 		}
-		if (interaction.options.getSubcommand() === 'website') { 
+		if (subcommand === 'website') {
 			const embed = new Discord.EmbedBuilder()
 				.setColor('#FF7100')
 				.setTitle(`**Leaderboards**`)
@@ -109,42 +114,25 @@ data: new Discord.SlashCommandBuilder()
 				.setTimestamp()
 			await interaction.editReply({ embeds: [embed] })
 		}
-		if (interaction.options.getSubcommand() === 'speedrun') {
+		if (subcommand === 'speedrun') {
 			const variant = interaction.options.getString('variant', true)
 			const shipClass = interaction.options.getString('shipclass', true)
-			const discordConvert = { 
-				"thargoid": capitalizeFirstLetter(variant),
-				"shipClass": capitalizeFirstLetter(shipClass),
-			}
 			try {
 				const response = await listSpeedrunBoard(variant, shipClass)
-				if (response.length > 0) {
-					let embeds = []
-					response.forEach((i,index) => {
-						const hours = Math.floor(Number(i.time) / 3600)
-						const minutes = Math.floor((Number(i.time) % 3600) / 60)
-						const seconds = Number(i.time) % 60
-						const embed = new Discord.EmbedBuilder()
-							.setColor('#FF7100')
-							.setTitle(`**Speedrun ${discordConvert.shipClass} ${discordConvert.thargoid}**`)
-							.setDescription(`#${index + 1} in Division`)
-							.addFields(
-								// **Pilot:** <@${i.user_id}>\r
-								{
-									name: `---------------------------------`, 
-									value: `
-										**Pilot:** ${i.name}\r
-										**Ship:**  ${i.ship}\r
-										**Time:** ${hours}h ${minutes}m ${seconds}s ${i.milliseconds}ms\r
-										**Seconds.Milliseconds:** ${i.time}.${i.milliseconds}\r
-										**Date:** ${timeConvertDS(i.date)}\r
-										**Link:** ${i.link}
-									`, inine: false 
-								},
-							)
-							.setTimestamp()
-						embeds.push(embed)
-					})
+				if (byMe) {
+					return interaction.editReply(createPersonalSpeedrunHistory({
+						guildId: interaction.guildId,
+						ownerUserId: interaction.user.id,
+						variant,
+						shipClass,
+						rows: response,
+					}))
+				}
+				const topTen = response.slice(0, 10)
+				if (topTen.length > 0) {
+					const embeds = topTen.map((entry, index) => (
+						buildSpeedrunEmbed(entry, index + 1, variant, shipClass)
+					))
 					await sendLeaderboardEmbeds(interaction, embeds)
 				} else {
 					await interaction.editReply({ content: 'No speedrun records were found for that variant and ship class.' })
@@ -156,7 +144,7 @@ data: new Discord.SlashCommandBuilder()
 				logLeaderboardError(interaction, err)
 			}
 		}
-		if (interaction.options.getSubcommand() === 'ace') {
+		if (subcommand === 'ace') {
 			const discordConvert = {
 				"shipClass": interaction.options.getString('shipclass', true),
 			}

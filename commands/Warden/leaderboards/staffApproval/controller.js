@@ -20,6 +20,8 @@ const { createLeaderboardEditorDocument } = require('./panel');
 const repository = require('../../../../Warden/db/leaderboards/repository');
 const { getLeaderboard, getSubmissionId } = repository;
 const { isLeaderboardMigrationMode } = require('../../../../Warden/db/leaderboards/migrationGuard');
+const { assertLeaderboardMutationAllowed } = require('../../../../Warden/leaderboards/policy');
+const { publishApprovedSubmission } = require('../../../../Warden/leaderboards/websitePublisher');
 
 const sessionRegistry = createPanelSessionRegistry({
     prefix: 'wLA',
@@ -110,6 +112,7 @@ const descriptorEditor = createDescriptorModalEditor({
     beginSubmission: async ({ state }) => {
         const context = state.context;
         if (!context) throw new Error('This Leaderboard editor is no longer available.');
+        await assertLeaderboardMutationAllowed(context.guildId);
         const submission = await repository.loadPendingSubmission(context.leaderboard, context.submissionId);
         assertApprovalPostCurrent(context, submission);
         return {
@@ -251,6 +254,7 @@ async function openEditor(interaction, leaderboard, submissionId) {
     let session;
     try {
         const context = buildContext(interaction, leaderboard, submissionId);
+        await assertLeaderboardMutationAllowed(context.guildId);
         const submission = await repository.loadPendingSubmission(context.leaderboard, context.submissionId);
         assertApprovalPostCurrent(context, submission);
         const panel = createEditorPanelSession(context, submission);
@@ -322,6 +326,10 @@ async function approveSubmission(interaction, context) {
         components: [],
     }, 'Approval');
     if (newlyApproved) await notifySubmitter(interaction, submission, true, leaderboard, context);
+    if (newlyApproved) {
+        void publishApprovedSubmission(context.guildId, leaderboard, submission)
+            .catch((error) => console.error('Leaderboard website approval sync failed:', error));
+    }
     if (refreshError) throw refreshError;
 }
 
@@ -391,6 +399,7 @@ async function handleApprovalAction(interaction, leaderboard, action, submission
             : `${leaderboard}:${submissionId}`;
         await resolutionOperations.run(operationKey, async () => {
             const context = buildContext(interaction, leaderboard, submissionId);
+            await assertLeaderboardMutationAllowed(context.guildId);
             const submission = await repository.loadSubmission(context.leaderboard, context.submissionId);
             if (!submission) throw new Error('That submission no longer exists. It may already have been deleted.');
             assertApprovalPostCurrent(context, submission, 'action');

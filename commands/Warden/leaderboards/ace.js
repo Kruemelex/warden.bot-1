@@ -8,7 +8,7 @@ const { getChart } = require('../math/commons/getChart')
 const { calculateAceScore, shipDataTable } = require('./aceScoreCalculator')
 const { findAceApproved } = require('../../../Warden/db/leaderboards/repository')
 const { createLeaderboardSubmission } = require('./leaderboardSubmission')
-const { isLeaderboardMigrationMode } = require('../../../Warden/db/leaderboards/migrationGuard')
+const { assertLeaderboardSubmissionAllowed, isLeaderboardAvailabilityError } = require('../../../Warden/leaderboards/policy')
 /*
 Damage threshold entry:
 "Interceptor name" : {
@@ -95,9 +95,8 @@ module.exports = {
         const submissionRequested = args.submit_url !== undefined
         if (submissionRequested) {
             await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral })
-			if (isLeaderboardMigrationMode()) {
-				return interaction.editReply({ content: '⏳ Leaderboard submissions are temporarily unavailable during maintenance.' })
-			}
+			try { await assertLeaderboardSubmissionAllowed(interaction.guildId, 'ace') }
+			catch (error) { return interaction.editReply({ content: `⏳ ${error.message}` }) }
         }
         const replyPrivately = (content) => submissionRequested
             ? interaction.editReply({ content })
@@ -279,6 +278,9 @@ module.exports = {
                     })
                 }
                 catch (err) {
+					if (isLeaderboardAvailabilityError(err)) {
+						return interaction.editReply({ content: `⏳ ${err.message}` })
+					}
                     console.log(err)
                     void Promise.resolve().then(() => botLog(
                         interaction.guild,
