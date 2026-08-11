@@ -162,7 +162,7 @@ async function listSpeedrunBoard(variant, shipClass) {
             - (Number(right.time) * 1000 + Number(right.milliseconds)) || left.id - right.id);
 }
 
-async function listAceBoard(shiptype) {
+async function listAceBoard(shiptype, { limit = 10 } = {}) {
     await initializeLeaderboards();
     const rows = await database.query(
         `SELECT * FROM ${TABLES.ace} WHERE shiptype_lookup = ? AND approval = 1`,
@@ -170,7 +170,7 @@ async function listAceBoard(shiptype) {
     );
     return (rows ?? []).map((row) => decodeRow('ace', row))
         .sort((left, right) => Number(right.score) - Number(left.score) || left.id - right.id)
-        .slice(0, 10);
+        .slice(0, Number.isSafeInteger(limit) && limit > 0 ? limit : 10);
 }
 
 async function findSpeedrunBest(userId, variant, shipClass) {

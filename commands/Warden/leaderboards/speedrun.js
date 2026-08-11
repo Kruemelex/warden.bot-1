@@ -3,7 +3,7 @@ const Discord = require("discord.js");
 const ships = require('./ships.json')
 const { findSpeedrunBest } = require('../../../Warden/db/leaderboards/repository')
 const { createLeaderboardSubmission } = require('./leaderboardSubmission')
-const { isLeaderboardMigrationMode } = require('../../../Warden/db/leaderboards/migrationGuard')
+const { assertLeaderboardSubmissionAllowed, isLeaderboardAvailabilityError } = require('../../../Warden/leaderboards/policy')
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -61,9 +61,8 @@ module.exports = {
     },
 	async execute(interaction) {
 		await interaction.deferReply({ flags: Discord.MessageFlags.Ephemeral });
-		if (isLeaderboardMigrationMode()) {
-			return interaction.editReply({ content: '⏳ Leaderboard submissions are temporarily unavailable during maintenance.' })
-		}
+		try { await assertLeaderboardSubmissionAllowed(interaction.guildId, 'speedrun') }
+		catch (error) { return interaction.editReply({ content: `⏳ ${error.message}` }) }
 		let args = {}
 		let user = interaction.member.id
 		let timestamp = Date.now()
@@ -143,6 +142,9 @@ module.exports = {
 			})
 		}
 		catch (err) {
+			if (isLeaderboardAvailabilityError(err)) {
+				return interaction.editReply({ content: `⏳ ${err.message}` })
+			}
 			console.log(err)
 			botLog(interaction.guild,new Discord.EmbedBuilder()
 				.setDescription('```' + err.stack + '```')

@@ -11,6 +11,7 @@ const { buildApprovalMessage } = require('../leaderboardApprovalMessages');
 const { isLeaderboardMigrationMode } = require('../../../../Warden/db/leaderboards/migrationGuard');
 
 const RECONCILIATION_INTERVAL_MS = 3500;
+const activeReconciliations = new Map();
 
 function isUnknownMessage(error) {
     return (error?.code ?? error?.rawError?.code) === 10008 || error?.status === 404;
@@ -47,7 +48,7 @@ async function reportReconciliationError(guild, type, submission, error) {
     ).catch((logError) => console.error('Failed to log Leaderboard reconciliation error:', logError));
 }
 
-async function reconcilePendingLeaderboardApprovals(guild) {
+async function reconcilePendingLeaderboardApprovalsNow(guild) {
     if (isLeaderboardMigrationMode()) return { reconciled: 0, skipped: 'migration-mode' };
     const channelId = getLeaderboardApprovalChannelId(guild.id);
     if (!channelId) return { reconciled: 0 };
@@ -77,6 +78,18 @@ async function reconcilePendingLeaderboardApprovals(guild) {
         if (submissions.length > 0) console.log(`Processed ${type} Messages Completed`.cyan);
     }
     return { reconciled };
+}
+
+function reconcilePendingLeaderboardApprovals(guild) {
+    const guildId = String(guild?.id ?? '');
+    if (!guildId) return Promise.reject(new Error('Leaderboard approval reconciliation requires a guild.'));
+    const existing = activeReconciliations.get(guildId);
+    if (existing) return existing;
+    const operation = reconcilePendingLeaderboardApprovalsNow(guild).finally(() => {
+        if (activeReconciliations.get(guildId) === operation) activeReconciliations.delete(guildId);
+    });
+    activeReconciliations.set(guildId, operation);
+    return operation;
 }
 
 module.exports = {
