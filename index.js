@@ -144,6 +144,9 @@ function mainOperation(){
 		global.guild = guild
 		const activeBotName = botFunc.botIdent().activeBot.botName
 		const activeDatabase = require(`./${activeBotName}/db/database`)
+		const wardenLeaderboards = activeBotName === 'Warden'
+			? require('./Warden/leaderboards')
+			: undefined
 		const loggingSettings = require('./loggingSettings')
 		try {
 			await loggingSettings.initializeLoggingSettings({
@@ -226,6 +229,15 @@ function mainOperation(){
 				}
 			}
 		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Bot has Loaded In:".magenta,'✅');
+		if (wardenLeaderboards) {
+			void Promise.resolve().then(async () => {
+				const result = await wardenLeaderboards.initializeLeaderboardWebsite({
+					guild,
+					guildId: configuredGuildId,
+				})
+				if (result?.skipped !== 'unconfigured') console.log('Leaderboard website startup sync completed.')
+			}).catch((err) => console.error('Leaderboard website startup sync failed:', err))
+		}
 	})
 	if (process.env.MODE != "PROD") {
 		bot.on('error', console.log)

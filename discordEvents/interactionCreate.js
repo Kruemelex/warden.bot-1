@@ -14,6 +14,9 @@ const isWarden = botIdent().activeBot.botName === 'Warden'
 const handleLeaderboardInteraction = isWarden
     ? require('../commands/Warden/leaderboards/staffApproval/controller').handleLeaderboardInteraction
     : undefined
+const handleLeaderboardFeatureInteraction = isWarden
+    ? require('../Warden/leaderboards').handleInteraction
+    : undefined
 const handleLoggingSettingsInteraction = require('../loggingSettings').handleInteraction
 
 let args = {}
@@ -144,6 +147,7 @@ const exp = {
             handleLeaderboardInteraction
             && await handleLeaderboardInteraction(interaction)
         ) return
+        if (handleLeaderboardFeatureInteraction && await handleLeaderboardFeatureInteraction(interaction)) return
         if (await handleLoggingSettingsInteraction(interaction)) return
 
         if (interaction.isModalSubmit()) {
