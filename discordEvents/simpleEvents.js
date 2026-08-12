@@ -962,6 +962,7 @@ const exp = {
                 const authorValue = authorId ? `<@${authorId}>` : 'Unknown'
                 const deletedEmbed = new Discord.EmbedBuilder()
                     .setTitle(`Message Deleted 🗑️`)
+                    .setDescription(`Message deleted by user: ${deletedByValue}\nMessage Author: ${authorValue}`)
                     .addFields(
                         { name: 'By User', value: deletedByValue },
                         { name: 'Author', value: authorValue },
@@ -1010,12 +1011,15 @@ const exp = {
             if (!newContent) newContent = 'No new content.'
             if (!oldMessage || oldMessage.partial || !oldContent) oldContent = 'Bot: Cache Unvailable'
 
-            const fields = [{ name: 'By User', value: `<@${newMessage.author.id}>` }]
+            const updatedByValue = `<@${newMessage.author.id}>`
+            const fields = [{ name: 'By User', value: updatedByValue }]
             const oldEmbeds = [new Discord.EmbedBuilder()
                 .setTitle('Message Updated 📝')
+                .setDescription(`Message updated by user: ${updatedByValue}`)
                 .addFields(...fields, ...buildCopyableMessageFields('Old Message', oldContent))]
             const newEmbeds = [new Discord.EmbedBuilder()
                 .setTitle('Message Updated 📝')
+                .setDescription(`Message updated by user: ${updatedByValue}`)
                 .addFields(
                     ...fields,
                     ...buildCopyableMessageFields('New Message', newContent),
