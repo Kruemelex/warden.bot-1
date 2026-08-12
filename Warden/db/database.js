@@ -2,10 +2,7 @@ const { botIdent } = require('../../functions')
 
 if (botIdent().activeBot.botName == 'Warden') {
     const mysql = require('mysql2')
-    const {
-        isRetryableDatabaseRead,
-        retryTransientDatabaseOperation,
-    } = require('./errorPolicy')
+    const { retryTransientDatabaseOperation } = require('./errorPolicy')
     require("dotenv").config({ path: `../../${botIdent().activeBot.env}` })
 
     const DB_ACQUIRE_TIMEOUT_MS = 10_000
@@ -67,7 +64,7 @@ if (botIdent().activeBot.botName == 'Warden') {
         const startedAt = Date.now()
         try {
             const result = await retryTransientDatabaseOperation(
-                () => query('SELECT 1', undefined, { retryTransientReads: false }),
+                () => query('SELECT 1'),
                 { retryDelayMs: DB_KEEPALIVE_RETRY_DELAY_MS },
             )
             const duration = formatDuration(Date.now() - startedAt)
@@ -127,7 +124,7 @@ if (botIdent().activeBot.botName == 'Warden') {
         })
     }
 
-    async function executeQueryOnce(sql, values) {
+    async function query(sql, values) {
         const targetPool = pool
         const acquiredConnection = await acquireConnection(targetPool)
         return new Promise((resolve, reject) => {
@@ -144,17 +141,6 @@ if (botIdent().activeBot.botName == 'Warden') {
                 reject(err)
             }
         })
-    }
-
-    async function query(sql, values, options = {}) {
-        if (options.retryTransientReads === false || !isRetryableDatabaseRead(sql)) {
-            return executeQueryOnce(sql, values)
-        }
-        const result = await retryTransientDatabaseOperation(
-            () => executeQueryOnce(sql, values),
-            { retryDelayMs: options.retryDelayMs ?? DB_KEEPALIVE_RETRY_DELAY_MS },
-        )
-        return result.value
     }
 
     //! ##############################
