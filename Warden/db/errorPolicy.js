@@ -23,6 +23,19 @@ function isTransientDatabaseError(error) {
     return false;
 }
 
+function isRetryableDatabaseRead(sql) {
+    const statement = String(sql ?? '').trim();
+    if (!/^SELECT\b/i.test(statement)) return false;
+
+    const withoutTrailingTerminator = statement.replace(/;\s*$/, '');
+    if (withoutTrailingTerminator.includes(';')) return false;
+    if (/\bFOR\s+(?:UPDATE|SHARE)\b/i.test(withoutTrailingTerminator)) return false;
+    if (/\bLOCK\s+IN\s+SHARE\s+MODE\b/i.test(withoutTrailingTerminator)) return false;
+    if (/\b(?:GET_LOCK|RELEASE_LOCK)\s*\(/i.test(withoutTrailingTerminator)) return false;
+    if (/\bINTO\s+(?:OUTFILE|DUMPFILE)\b/i.test(withoutTrailingTerminator)) return false;
+    return true;
+}
+
 function delay(ms) {
     return new Promise((resolve) => {
         const timer = setTimeout(resolve, ms);
@@ -40,7 +53,7 @@ async function retryTransientDatabaseOperation(operation, options = {}) {
         };
     }
     catch (firstError) {
-        if (!isTransientDatabaseError(firstError)) throw firstError;
+        if (!isTransientDatabaseError(firstError) || firstError?.databaseRetryAttempted) throw firstError;
         await sleep(retryDelayMs);
         try {
             return {
@@ -68,6 +81,7 @@ async function retryTransientDatabaseOperation(operation, options = {}) {
 }
 
 module.exports = {
+    isRetryableDatabaseRead,
     isTransientDatabaseError,
     retryTransientDatabaseOperation,
 };
