@@ -2,7 +2,7 @@ const Discord = require("discord.js");
 const config = require('../../../config.json');
 const { botLog,botIdent } = require('../../../functions');
 
-function getRanks(ranktype, roleCache) {
+function getRanks(ranktype, roleCache, memberCounts) {
 	if (!config[botIdent().activeBot.botName].ranksCommand[ranktype]) throw new Error(`Invalid rank type: ${ranktype}`);
 	const ranks = config[botIdent().activeBot.botName].ranksCommand[ranktype];
 		
@@ -10,7 +10,7 @@ function getRanks(ranktype, roleCache) {
 	for(const rank of ranks) {		
 		const role = roleCache.find(role => role.name === rank);
 		if (!role) continue;
-		rankData.push({name: rank, value: role.members.size.toString(), inline: true});
+		rankData.push({name: rank, value: String(memberCounts.get(role.id) ?? 0), inline: true});
 	}
 
 	return rankData;
@@ -32,16 +32,27 @@ module.exports = {
 			.addComponents(new Discord.ButtonBuilder().setCustomId('competitive').setLabel('Competitive Ranks').setStyle(Discord.ButtonStyle.Primary),)
 			.addComponents(new Discord.ButtonBuilder().setCustomId('progression').setLabel('Progression Ranks').setStyle(Discord.ButtonStyle.Primary),)
 			.addComponents(new Discord.ButtonBuilder().setCustomId('other').setLabel('Other Ranks').setStyle(Discord.ButtonStyle.Primary),)
-		message.reply({ content: "Select which ranks to list:", components: [row], ephemeral: true });
+		await message.reply({ content: "Select which ranks to list:", components: [row], flags: Discord.MessageFlags.Ephemeral });
+		let memberCountsPromise;
+		const getMemberCounts = () => {
+			if (!memberCountsPromise) {
+				memberCountsPromise = message.guild.roles.fetchMemberCounts()
+					.catch((error) => {
+						memberCountsPromise = undefined;
+						throw error;
+					});
+			}
+			return memberCountsPromise;
+		};
 
 		// Recieve the button response 
 		const filter = i => i.user.id === message.member.id;
 		const collector = message.channel.createMessageComponentCollector({ filter, time: 15000 });
 		collector.on('collect', async i => {
 			if (i.customId === 'challenge') {
-				i.deferUpdate();
 				try {
-					const rankData = getRanks("challenge_ranks", roleCache);
+					await i.deferUpdate();
+					const rankData = getRanks("challenge_ranks", roleCache, await getMemberCounts());
 					const returnEmbed = new Discord.EmbedBuilder()
 						.setColor('#FF7100')
 						.setTitle("**Challenge Ranks**")
@@ -60,9 +71,9 @@ module.exports = {
 				}
 			}
 			if (i.customId === 'competitive') {
-				i.deferUpdate();
 				try {
-					const rankData = getRanks("competitive_ranks", roleCache);
+					await i.deferUpdate();
+					const rankData = getRanks("competitive_ranks", roleCache, await getMemberCounts());
 					const returnEmbed = new Discord.EmbedBuilder()
 						.setColor('#FF7100')
 						.setTitle("**Competitive Ranks**")
@@ -81,9 +92,9 @@ module.exports = {
 				}
 			}
 			if (i.customId === 'progression') {
-				i.deferUpdate();
 				try {
-					const rankData = getRanks("progression_ranks", roleCache);
+					await i.deferUpdate();
+					const rankData = getRanks("progression_ranks", roleCache, await getMemberCounts());
 					const returnEmbed = new Discord.EmbedBuilder()
 						.setColor('#FF7100')
 						.setTitle("**Progression Ranks**")
@@ -102,9 +113,9 @@ module.exports = {
 				}
 			}
 			if (i.customId === 'other') {
-				i.deferUpdate();
 				try {
-					const rankData = getRanks("other_ranks", roleCache);
+					await i.deferUpdate();
+					const rankData = getRanks("other_ranks", roleCache, await getMemberCounts());
 					const returnEmbed = new Discord.EmbedBuilder()
 						.setColor('#FF7100')
 						.setTitle("**Other Ranks**")
