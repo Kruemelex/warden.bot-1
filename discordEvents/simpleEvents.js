@@ -21,39 +21,78 @@ function buildCopyableMessageEmbeds({
     content,
     author,
     messageLink,
+    firstChunkOnlyMetadata = false,
+    numberChunksWithTotal = false,
 }) {
-    const embeds = []
     const normalizedContent = neutralizeCodeFences(content)
     const codeBlockOverhead = wrapCodeBlock('').length
-    let position = 0
-    let page = 1
+    const messageLinkFooter = messageLink ? `\n\n**Message Link:** ${messageLink}` : ''
 
-    while (position < normalizedContent.length || page === 1) {
-        const label = page === 1
-            ? contentLabel
-            : `${contentLabel} (continued ${page})`
-        const header = `${searchableText}\n\n**${label}:**\n`
-        const messageLinkFooter = messageLink ? `\n\n**Message Link:** ${messageLink}` : ''
-        const chunkLimit = MESSAGE_EMBED_DESCRIPTION_LIMIT
-            - header.length
-            - codeBlockOverhead
-            - messageLinkFooter.length
+    function buildChunks(totalPages) {
+        const chunks = []
+        let position = 0
+        let page = 1
 
-        if (chunkLimit < 1) {
-            throw new Error('Message log metadata exceeds the Discord embed description limit.')
+        while (position < normalizedContent.length || page === 1) {
+            const isNumbered = numberChunksWithTotal && totalPages > 1
+            const label = isNumbered
+                ? `${contentLabel} ${page}/${totalPages}`
+                : page === 1
+                    ? contentLabel
+                    : `${contentLabel} (continued ${page})`
+            const includeMetadata = !firstChunkOnlyMetadata || page === 1
+            const searchableHeader = includeMetadata && searchableText ? `${searchableText}\n\n` : ''
+            const header = `${searchableHeader}**${label}:**\n`
+            const chunkLimit = MESSAGE_EMBED_DESCRIPTION_LIMIT
+                - header.length
+                - codeBlockOverhead
+                - messageLinkFooter.length
+
+            if (chunkLimit < 1) {
+                throw new Error('Message log metadata exceeds the Discord embed description limit.')
+            }
+
+            const chunk = normalizedContent.slice(position, position + chunkLimit)
+            chunks.push({
+                author: includeMetadata ? author : undefined,
+                chunk,
+                header,
+                page,
+            })
+            position += chunk.length
+            page += 1
         }
 
-        const chunk = normalizedContent.slice(position, position + chunkLimit)
-        const isFinalChunk = position + chunk.length >= normalizedContent.length
+        return chunks
+    }
+
+    let chunks
+    if (numberChunksWithTotal) {
+        let totalPages = 1
+        for (let attempt = 0; attempt < 32; attempt += 1) {
+            chunks = buildChunks(totalPages)
+            if (chunks.length === totalPages) break
+            totalPages = chunks.length
+        }
+
+        if (chunks.length !== totalPages) {
+            throw new Error('Unable to calculate stable Message Log chunk numbering.')
+        }
+    } else {
+        chunks = buildChunks(1)
+    }
+
+    const embeds = []
+    for (const { author: chunkAuthor, chunk, header, page } of chunks) {
+        const isFinalChunk = page === chunks.length
         const description = `${header}${wrapCodeBlock(chunk)}${isFinalChunk ? messageLinkFooter : ''}`
         const embed = new Discord.EmbedBuilder()
             .setTitle(page === 1 ? title : `${title} (continued ${page})`)
             .setDescription(description)
-            .setAuthor(author)
+
+        if (chunkAuthor) embed.setAuthor(chunkAuthor)
 
         embeds.push(embed)
-        position += chunk.length
-        page += 1
     }
 
     return embeds
@@ -1062,13 +1101,13 @@ const exp = {
                 contentLabel: 'Old Message',
                 content: oldContent,
                 author: messageAuthor,
+                firstChunkOnlyMetadata: true,
+                numberChunksWithTotal: true,
             })
             const newEmbeds = buildCopyableMessageEmbeds({
                 title: 'Message Updated 📝',
-                searchableText,
                 contentLabel: 'New Message',
                 content: newContent,
-                author: messageAuthor,
                 messageLink: newMessage.url,
             })
 
