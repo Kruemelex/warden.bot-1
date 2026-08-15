@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const https = require('node:https');
 const { URL } = require('node:url');
-const { createConsoleReporter } = require('../../consoleReporting');
+const { createConsoleReporter } = require('../../logging/consoleReporting');
 const { listAceBoard, listSpeedrunBoard } = require('../db/leaderboards/repository');
 const settings = require('./settings');
 const settingsRepository = require('./settingsRepository');
@@ -11,7 +11,7 @@ const settingsRepository = require('./settingsRepository');
 const ENDPOINT_PATH = '/axi-leaderboards/v1/sync';
 const MAX_ENTRIES_PER_BOARD = 25;
 const RESPONSE_LIMIT_BYTES = 64 * 1024;
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 const DAILY_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const SPEEDRUN_BOARDS = Object.freeze(
     ['cyclops', 'basilisk', 'medusa', 'hydra'].flatMap((variant) => (
@@ -19,7 +19,7 @@ const SPEEDRUN_BOARDS = Object.freeze(
     )),
 );
 const ACE_BOARDS = Object.freeze(['chieftain', 'challenger', 'kraitmk2', 'fdl']);
-const report = createConsoleReporter('Warden').forSubsystem('Leaderboard website');
+const report = createConsoleReporter('Leaderboard').forSubsystem('Website');
 
 let scheduledSync;
 const operations = new Map();

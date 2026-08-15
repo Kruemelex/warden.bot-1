@@ -1,140 +1,115 @@
-const Discord = require("discord.js");
+'use strict';
+
+const Discord = require('discord.js');
 const config = require('../../../config.json');
-const { botLog,botIdent } = require('../../../functions');
+const { botIdent, getIdentityBrandColor } = require('../../../functions');
 
-function getRanks(ranktype, roleCache, memberCounts) {
-	if (!config[botIdent().activeBot.botName].ranksCommand[ranktype]) throw new Error(`Invalid rank type: ${ranktype}`);
-	const ranks = config[botIdent().activeBot.botName].ranksCommand[ranktype];
-		
-	let rankData = [];
-	for(const rank of ranks) {		
-		const role = roleCache.find(role => role.name === rank);
-		if (!role) continue;
-		rankData.push({name: rank, value: String(memberCounts.get(role.id) ?? 0), inline: true});
-	}
+const RANK_CATEGORY_MODAL_CUSTOM_ID = 'warden:ranks:category';
+const RANK_CATEGORY_FIELD_CUSTOM_ID = 'rankCategory';
+const RANK_CATEGORY_OPTIONS = Object.freeze([
+    { label: 'Challenge', value: 'challenge_ranks', description: 'Ranks earned through AXI challenges.' },
+    { label: 'Competitive', value: 'competitive_ranks', description: 'Ranks for competitive achievements.' },
+    { label: 'Progression', value: 'progression_ranks', description: 'Ranks that mark your AX journey.' },
+    { label: 'Other', value: 'other_ranks', description: 'All other AXI ranks.' },
+]);
 
-	return rankData;
+function getRankCategory(rankType) {
+    const ranks = config[botIdent().activeBot.botName]?.ranksCommand?.[rankType];
+    if (!Array.isArray(ranks)) throw new Error('The requested rank category is unavailable.');
+    return ranks;
+}
+
+function getRanks(rankType, roleCache, memberCounts) {
+    return getRankCategory(rankType).flatMap((rank) => {
+        const role = roleCache.find((candidate) => candidate.name === rank);
+        if (!role) return [];
+        return [{ name: rank, value: String(memberCounts.get(role.id) ?? 0), inline: true }];
+    });
+}
+
+function getCategoryOption(rankType) {
+    return RANK_CATEGORY_OPTIONS.find((option) => option.value === rankType);
+}
+
+function buildRankCategoryModal() {
+    const select = new Discord.StringSelectMenuBuilder()
+        .setCustomId(RANK_CATEGORY_FIELD_CUSTOM_ID)
+        .setPlaceholder('Choose a rank category...')
+        .setMinValues(1)
+        .setMaxValues(1)
+        .setRequired(true)
+        .addOptions(RANK_CATEGORY_OPTIONS);
+    const label = new Discord.LabelBuilder()
+        .setLabel('Rank category')
+        .setStringSelectMenuComponent(select);
+
+    return new Discord.ModalBuilder()
+        .setCustomId(RANK_CATEGORY_MODAL_CUSTOM_ID)
+        .setTitle('Rank Statistics')
+        .addTextDisplayComponents(
+            new Discord.TextDisplayBuilder().setContent('Choose a category to post its current rank statistics publicly.'),
+        )
+        .addLabelComponents(label);
+}
+
+function buildRankEmbed(rankType, roleCache, memberCounts) {
+    const category = getCategoryOption(rankType);
+    if (!category) throw new Error('The requested rank category is unavailable.');
+    return new Discord.EmbedBuilder()
+        .setColor(getIdentityBrandColor())
+        .setTitle(`${category.label} Ranks`)
+        .setDescription(`${category.label} rank statistics`)
+        .addFields(getRanks(rankType, roleCache, memberCounts))
+        .setTimestamp();
+}
+
+function getSelectedRankCategory(interaction) {
+    const selected = interaction.fields?.getStringSelectValues?.(RANK_CATEGORY_FIELD_CUSTOM_ID);
+    const rankType = Array.isArray(selected) && selected.length === 1 ? selected[0] : undefined;
+    if (!getCategoryOption(rankType)) throw new Error('Please select a valid rank category.');
+    return rankType;
+}
+
+async function handleModalSubmit(interaction) {
+    await interaction.deferReply();
+    try {
+        const rankType = getSelectedRankCategory(interaction);
+        const guild = interaction.guild;
+        if (!guild?.roles?.cache || typeof guild.roles.fetchMemberCounts !== 'function') {
+            throw new Error('Rank statistics are only available in a server.');
+        }
+        const memberCounts = await guild.roles.fetchMemberCounts();
+        await interaction.editReply({
+            embeds: [buildRankEmbed(rankType, guild.roles.cache, memberCounts)],
+        });
+    }
+    catch (error) {
+        console.error('Failed to publish rank statistics:', error);
+        await interaction.editReply({
+            content: 'Unable to retrieve rank statistics right now. Please try again shortly.',
+        });
+    }
 }
 
 module.exports = {
-	data: new Discord.SlashCommandBuilder()
-	.setName('ranks')
-	.setDescription('Get rank statistics'),
-    // .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    permissions:0,
-	async execute(message) {
-
-		// Build the initial message
-		const roleCache = message.guild.roles.cache;
-
-		const row = new Discord.ActionRowBuilder()
-			.addComponents(new Discord.ButtonBuilder().setCustomId('challenge').setLabel('Challenge Ranks').setStyle(Discord.ButtonStyle.Primary),)
-			.addComponents(new Discord.ButtonBuilder().setCustomId('competitive').setLabel('Competitive Ranks').setStyle(Discord.ButtonStyle.Primary),)
-			.addComponents(new Discord.ButtonBuilder().setCustomId('progression').setLabel('Progression Ranks').setStyle(Discord.ButtonStyle.Primary),)
-			.addComponents(new Discord.ButtonBuilder().setCustomId('other').setLabel('Other Ranks').setStyle(Discord.ButtonStyle.Primary),)
-		await message.reply({ content: "Select which ranks to list:", components: [row], flags: Discord.MessageFlags.Ephemeral });
-		let memberCountsPromise;
-		const getMemberCounts = () => {
-			if (!memberCountsPromise) {
-				memberCountsPromise = message.guild.roles.fetchMemberCounts()
-					.catch((error) => {
-						memberCountsPromise = undefined;
-						throw error;
-					});
-			}
-			return memberCountsPromise;
-		};
-
-		// Recieve the button response 
-		const filter = i => i.user.id === message.member.id;
-		const collector = message.channel.createMessageComponentCollector({ filter, time: 15000 });
-		collector.on('collect', async i => {
-			if (i.customId === 'challenge') {
-				try {
-					await i.deferUpdate();
-					const rankData = getRanks("challenge_ranks", roleCache, await getMemberCounts());
-					const returnEmbed = new Discord.EmbedBuilder()
-						.setColor('#FF7100')
-						.setTitle("**Challenge Ranks**")
-						.setDescription(`Challenge Rank Statistics`)
-						.addFields(rankData);
-					i.channel.send({ embeds: [returnEmbed.setTimestamp()] });
-				} catch (err) {
-					console.error(err);
-					i.channel.send({ content: `Something went wrong. Error: ${err}` });
-					botLog(i.guild,new Discord.EmbedBuilder()
-						.setDescription('```' + err.stack + '```')
-						.setTitle(`⛔ Fatal error experienced`)
-						,2
-						,'error'
-					)
-				}
-			}
-			if (i.customId === 'competitive') {
-				try {
-					await i.deferUpdate();
-					const rankData = getRanks("competitive_ranks", roleCache, await getMemberCounts());
-					const returnEmbed = new Discord.EmbedBuilder()
-						.setColor('#FF7100')
-						.setTitle("**Competitive Ranks**")
-						.setDescription(`Competitive a Statistics`)
-						.addFields(rankData);
-					i.channel.send({ embeds: [returnEmbed.setTimestamp()] });
-				} catch (err) {
-					console.error(err);
-					i.channel.send({ content: `Something went wrong. Error: ${err}` });
-					botLog(i.guild,new Discord.EmbedBuilder()
-						.setDescription('```' + err.stack + '```')
-						.setTitle(`⛔ Fatal error experienced`)
-						,2
-						,'error'
-					)
-				}
-			}
-			if (i.customId === 'progression') {
-				try {
-					await i.deferUpdate();
-					const rankData = getRanks("progression_ranks", roleCache, await getMemberCounts());
-					const returnEmbed = new Discord.EmbedBuilder()
-						.setColor('#FF7100')
-						.setTitle("**Progression Ranks**")
-						.setDescription(`Progression Rank Statistics`)
-						.addFields(rankData);
-					i.channel.send({ embeds: [returnEmbed.setTimestamp()] });
-				} catch (err) {
-					console.error(err);
-					i.channel.send(`Something went wrong. Error: ${err}`);
-					botLog(i.guild,new Discord.EmbedBuilder()
-						.setDescription('```' + err.stack + '```')
-						.setTitle(`⛔ Fatal error experienced`)
-						,2
-						,'error'
-					)
-				}
-			}
-			if (i.customId === 'other') {
-				try {
-					await i.deferUpdate();
-					const rankData = getRanks("other_ranks", roleCache, await getMemberCounts());
-					const returnEmbed = new Discord.EmbedBuilder()
-						.setColor('#FF7100')
-						.setTitle("**Other Ranks**")
-						.setDescription(`Other Rank Statistics`)
-						.addFields(rankData);
-					i.channel.send({ embeds: [returnEmbed.setTimestamp()] });
-				} catch (err) {
-					console.error(err);
-					i.channel.send({ content: `Something went wrong. Error: ${err}` });
-					botLog(i.guild,new Discord.EmbedBuilder()
-						.setDescription('```' + err.stack + '```')
-						.setTitle(`⛔ Fatal error experienced`)
-						,2
-						,'error'
-					)
-				}
-			}
-		});
-
-		collector.on('end', collected => console.log(`Collected ${collected.size} items`));
-	}
-}
+    data: new Discord.SlashCommandBuilder()
+        .setName('ranks')
+        .setDescription('Get rank statistics'),
+    permissions: 0,
+    execute(interaction) {
+        return interaction.showModal(buildRankCategoryModal());
+    },
+    handleInteraction(interaction) {
+        if (
+            !interaction.isModalSubmit?.()
+            || interaction.customId !== RANK_CATEGORY_MODAL_CUSTOM_ID
+        ) return false;
+        return handleModalSubmit(interaction).then(() => true);
+    },
+    RANK_CATEGORY_FIELD_CUSTOM_ID,
+    RANK_CATEGORY_MODAL_CUSTOM_ID,
+    RANK_CATEGORY_OPTIONS,
+    buildRankCategoryModal,
+    buildRankEmbed,
+    getRanks,
+};

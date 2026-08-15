@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent,cleanString,botLog,hasSpecifiedRole } = require('../../../functions');
+const { botIdent,cleanString,botLog,hasSpecifiedRole,getIdentityBrandColor } = require('../../../functions');
 const config = require('../../../config.json')
 //todo Not setup for Warden.
 //todo Warden uses /ranks
@@ -83,7 +83,7 @@ module.exports = {
             let memberList = []
             roles = clean_args
             const returnEmbed = new Discord.EmbedBuilder()
-            .setColor('#FF7100')
+            .setColor(getIdentityBrandColor())
             interaction.guild.members.cache.each(member => {
                 if (!member.user.bot) { 
                     let memberroles = member._roles
@@ -165,7 +165,7 @@ module.exports = {
                     let role = interaction.guild.roles.cache.get(roleID)
               
                     const returnEmbed = new Discord.EmbedBuilder()
-                    .setColor('#FF7100')
+                    .setColor(getIdentityBrandColor())
                     .setTitle(`**Role Info - ${role.name}**`)
                     .setDescription(`Role information for ${role}`)
                     .addFields(

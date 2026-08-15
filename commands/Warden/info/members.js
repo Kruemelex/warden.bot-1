@@ -1,148 +1,194 @@
-const Discord = require("discord.js");
+'use strict';
+
+const Discord = require('discord.js');
+const config = require('../../../config.json');
 const { cleanString } = require('../../../functions');
-const fs = require('fs')
+const {
+    RoleMemberCache,
+    RoleMemberCacheError,
+    getAllowedGuildRoles,
+} = require('../../../Warden/members/roleMemberCache');
+
+const memberCache = new RoleMemberCache();
+
+function getMembersConfiguration() {
+    return {
+        ranksCommand: config.Warden?.ranksCommand,
+        membersCommand: config.Warden?.membersCommand,
+    };
+}
+
+function getInteractionOption(interaction, name, type, required = false) {
+    const getter = interaction.options?.[`get${type}`];
+    if (typeof getter === 'function') return getter.call(interaction.options, name, required);
+    const value = interaction.options?.data?.find((option) => option.name === name)?.value;
+    if (required && (value === undefined || value === null)) {
+        throw new RoleMemberCacheError(`The ${name} option is required.`, 'MISSING_OPTION');
+    }
+    return value;
+}
+
+function getAllowedRolesForGuild(guild) {
+    return getAllowedGuildRoles({
+        roleCache: guild?.roles?.cache,
+        ...getMembersConfiguration(),
+    });
+}
+
+function csvEscape(value) {
+    const raw = String(value ?? '');
+    const string = /^[=+\-@]/u.test(raw) ? `'${raw}` : raw;
+    return /[",\r\n]/u.test(string) ? `"${string.replace(/"/gu, '""')}"` : string;
+}
+
+function recordValue(record, type) {
+    switch (type) {
+        case 'tag': return record.tag;
+        case 'username': return record.username;
+        case 'id': return record.id;
+        case 'nickname': return record.displayName;
+        default: throw new RoleMemberCacheError('Wrong file type!', 'INVALID_OUTPUT_TYPE');
+    }
+}
+
+function recordsForRole(snapshot, roleId) {
+    const ids = snapshot.memberIdsByRole.get(roleId) ?? new Set();
+    return Array.from(ids, (id) => snapshot.membersById.get(id)).filter(Boolean);
+}
+
+function attachment(buffer, name) {
+    return new Discord.AttachmentBuilder(buffer, { name });
+}
+
+async function respondWithError(interaction, error) {
+    const expected = error instanceof RoleMemberCacheError;
+    if (!expected) console.error(error);
+    const content = expected
+        ? `⚠️ ${error.message}`
+        : 'Something went wrong while preparing the member list.';
+    if (typeof interaction.editReply === 'function') return interaction.editReply({ content });
+    return interaction.reply({ content, flags: Discord.MessageFlags.Ephemeral });
+}
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
-	.setName('members')
-	.setDescription('Lists the tag/username/id/nickname(default = nickname) of members with given role.')
-    .addRoleOption(option => option.setName('role')
-		.setDescription('The role to target')
-		.setRequired(true))
-    .addStringOption(option => option.setName('output')
-		.setDescription('How to output the data')
-		.setRequired(true)
-        .addChoices(
-            {name:'CSV', value:'csv'},
-            {name:'TXT', value:'txt'},
-        ))
-    .addStringOption(option => option.setName('type')
-		.setDescription('Type of data to list')
-		.setRequired(true)
-        .addChoices(
-            {name:'Tag', value:'tag'},
-            {name:'Username', value:'username'},
-            {name:'ID', value:'id'},
-            {name:'Nickname', value:'nickname'},
-        ))
-    .addIntegerOption(option => option.setName('maxlength')
-		.setDescription('Total number to list')
-		.setRequired(false)),
-	    // .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-	permissions: 0,
-    execute (interaction) {
-        let args = []
-        for (let data of interaction.options.data) {
-            args.push(data.value)
-        }
-        try {
-            let roleID = interaction.options.data.find(arg => arg.name === 'role').value
-            let mode = "txt"
-            if (interaction.options.data.find(arg => arg.name === 'output') != undefined) { mode = interaction.options.data.find(arg => arg.name === 'output').value }
-            let memberwithrole = interaction.guild.roles.cache.get(roleID).members
-            let actualrole = cleanString(interaction.guild.roles.cache.find(role => role.id == roleID).name)
-            let memberList = ""
-            if(mode == "txt")
-            {
-                let type = ""
-                if(interaction.options.data.find(arg => arg.name === 'type') == undefined)
-                {
-                    type = "nickname"
-                }
-                else
-                {
-                    type = interaction.options.data.find(arg => arg.name === 'type').value
-                }
-                let highlength = 0
-                if(interaction.options.data.find(arg => arg.name === 'maxlength') == undefined)
-                {
-                    highlength = 10
-                }
-                else
-                {
-                    highlength = interaction.options.data.find(arg => arg.name === 'maxlength').value
-                }
-                let memberEmbedList = []
-                memberwithrole.map(m =>
-                {
-                    if(type == 'tag')
-                    {
-                        memberList = memberList + m.user.tag + "\n"
-                        memberEmbedList.push(m.user.tag)
-                    }
-                    if(type == 'username')
-                    {
-                        memberList = memberList + m.user.username + "\n"
-                        memberEmbedList.push(m.user.username)
-                    }
-                    if(type == 'id')
-                    {
-                        memberList = memberList + m.user.id + "\n"
-                        memberEmbedList.push(m.user.id)
-                    }
-                    if(type == 'nickname')
-                    {
-                        memberList = memberList + m.displayName + "\n"
-                        memberEmbedList.push(m.displayName)
-                    }
-                })
-                let membercount
-                try
-                {
-                    membercount = memberList.match(/[\n]/g).length
-                }
-                catch(TypeError)
-                {
-                    throw(`No members found with role ${actualrole}`)
-                }
-                if(membercount <= highlength)
-                // if(memberList.match(/[\n]/g).length <= highlength)
-                {
-                    const returnEmbed = new Discord.EmbedBuilder()
-                    .setColor('#FF7100')
-                    .setTitle("**Member List**")
-                    returnEmbed.addFields({ name: "List of members holding rank " + actualrole +":", value: `**${memberEmbedList.join("\n")}**`})
-                    interaction.reply({ embeds: [returnEmbed.setTimestamp()] });
-                }
-                else
-                {
-                    fs.writeFileSync('tmp/memberlist.txt', memberList);
-                    //todo Need to verify this tmp directory can be written to on all servers. Emplace check
-                    interaction.reply({
-                        content:"Members List longer than "+highlength+"!\nSending the " + type +" in a txt file:",
-                        files:[
-                                "tmp/memberlist.txt"
-                              ]
-                    })
-                }
-            }
-            else
-            {
-                if(mode == "csv")
-                {
-                    memberList = "Discord tag,Discord Username,Discord Id,Server Nickname/displayName\n"
-                    memberwithrole.map(m =>
-                        {
-                                memberList = memberList + m.user.tag + "," + m.user.username + "," + m.user.id + "," +  m.displayName + "\n"
+        .setName('members')
+        .setDescription('Lists the tag/username/id/nickname(default = nickname) of members with a configured rank.')
+        .addStringOption((option) => option.setName('role')
+            .setDescription('The configured rank to target')
+            .setRequired(true)
+            .setAutocomplete(true))
+        .addStringOption((option) => option.setName('output')
+            .setDescription('How to output the data')
+            .setRequired(true)
+            .addChoices(
+                { name: 'CSV', value: 'csv' },
+                { name: 'TXT', value: 'txt' },
+            ))
+        .addStringOption((option) => option.setName('type')
+            .setDescription('Type of data to list')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Tag', value: 'tag' },
+                { name: 'Username', value: 'username' },
+                { name: 'ID', value: 'id' },
+                { name: 'Nickname', value: 'nickname' },
+            ))
+        .addIntegerOption((option) => option.setName('maxlength')
+            .setDescription('Total number to list')
+            .setRequired(false)),
+    permissions: 0,
 
-                        })
-                    fs.writeFileSync('tmp/memberlist.csv',memberList)
-                    interaction.reply({
-                                content:"Here's your CSV file:",
-                                files:[
-                                        "tmp/memberlist.csv"
-                                      ]
-                    })
-                }
-                else
-                {
-                    throw("Wrong file type!")
-                }
+    async autocomplete(interaction) {
+        const focused = interaction.options.getFocused(true);
+        if (focused.name !== 'role') return interaction.respond([]);
+
+        try {
+            const needle = String(focused.value ?? '').toLocaleLowerCase();
+            const choices = getAllowedRolesForGuild(interaction.guild)
+                .filter((role) => role.name.toLocaleLowerCase().includes(needle))
+                .slice(0, 25)
+                .map((role) => ({ name: role.name, value: role.id }));
+            return interaction.respond(choices);
+        }
+        catch (error) {
+            console.error('Unable to resolve /members autocomplete roles:', error.message);
+            return interaction.respond([]);
+        }
+    },
+
+    async execute(interaction) {
+        await interaction.deferReply();
+        try {
+            const roleId = String(getInteractionOption(interaction, 'role', 'String', true));
+            const output = getInteractionOption(interaction, 'output', 'String', true);
+            const type = getInteractionOption(interaction, 'type', 'String', true);
+            const maxLength = getInteractionOption(interaction, 'maxlength', 'Integer') ?? 10;
+            const allowedRoles = getAllowedRolesForGuild(interaction.guild);
+            const role = allowedRoles.find((candidate) => candidate.id === roleId);
+            if (!role) {
+                throw new RoleMemberCacheError(
+                    'That role is not available through /members.',
+                    'ROLE_NOT_ALLOWED',
+                );
             }
-        } catch(err) {
-            console.error(err);
-			interaction.reply(`Something went wrong!\nERROR: ${err}`)
-		}
-    }
-}
- 
+
+            const snapshot = await memberCache.getSnapshot(interaction.guild, allowedRoles);
+            const records = recordsForRole(snapshot, role.id);
+            const actualRole = cleanString(role.name);
+
+            if (output === 'csv') {
+                const rows = [
+                    'Discord tag,Discord Username,Discord Id,Server Nickname/displayName',
+                    ...records.map((record) => [
+                        record.tag,
+                        record.username,
+                        record.id,
+                        record.displayName,
+                    ].map(csvEscape).join(',')),
+                ];
+                return interaction.editReply({
+                    content: "Here's your CSV file:",
+                    files: [attachment(Buffer.from(`${rows.join('\n')}\n`, 'utf8'), 'memberlist.csv')],
+                });
+            }
+
+            if (output !== 'txt') {
+                throw new RoleMemberCacheError('Wrong file type!', 'INVALID_OUTPUT_TYPE');
+            }
+
+            if (!records.length) {
+                return interaction.editReply({ content: `No members found with role ${actualRole}.` });
+            }
+
+            const values = records.map((record) => recordValue(record, type));
+            const memberList = `${values.join('\n')}\n`;
+            const embedValue = values.join('\n');
+            if (records.length <= maxLength && embedValue.length <= 1024) {
+                const returnEmbed = new Discord.EmbedBuilder()
+                    .setColor('#FF7100')
+                    .setTitle('**Member List**')
+                    .addFields({
+                        name: `List of members holding rank ${actualRole}:`,
+                        value: `**${embedValue}**`,
+                    })
+                    .setTimestamp();
+                return interaction.editReply({ embeds: [returnEmbed] });
+            }
+
+            return interaction.editReply({
+                content: `Members List longer than ${maxLength}!\nSending the ${type} in a txt file:`,
+                files: [attachment(Buffer.from(memberList, 'utf8'), 'memberlist.txt')],
+            });
+        }
+        catch (error) {
+            return respondWithError(interaction, error);
+        }
+    },
+
+    _private: {
+        csvEscape,
+        getAllowedRolesForGuild,
+        recordsForRole,
+    },
+};

@@ -3,7 +3,15 @@ const fs = require("fs")
 const path = require("path")
 const glob = require('glob')
 const Discord = require('discord.js')
+const { createConsoleReporter, logConsoleStartupStatus } = require('./logging/consoleReporting')
 let botLogDestinationResolver
+const commandRegistrationReporter = createConsoleReporter('Commands').forSubsystem('Registration')
+const eventRegistrationReporter = createConsoleReporter('Events').forSubsystem('Registration')
+
+function logActiveBotStartupStatus(label, status, options) {
+    const botName = thisBotFunctions.botIdent().activeBot?.botName ?? 'Unknown bot';
+    return logConsoleStartupStatus(botName, label, status, options);
+}
 //This functions.js file serves as a global functions context for all bots that may reuse the same code.
 /**
  * @author (testfax) Medi0cr3 @testfax
@@ -33,12 +41,16 @@ const thisBotFunctions = {
                         let mod1 = modifiedArray[hostnameIndex]
                         obj["hostName"] = mod1.split("=")[1].trim()
                         if (obj.hostName === current) { result = obj }
-                    } else { console.log("[STARTUP]".red,`${file}`.yellow,"HOSTNAME".bgRed,"not found.".red) }
+                    } else {
+                        logActiveBotStartupStatus(`${file} HOSTNAME`, 'not found.', { failed: true })
+                    }
                     if (botnameIndex >= 0) {
                         let mod2 = modifiedArray[botnameIndex]
                         obj["botName"] = mod2.split("=")[1].trim()
                         if (obj.hostName === current) { result = obj }
-                    } else { console.log("[STARTUP]".red,`${file}`.yellow,"BOTNAME".bgRed,"not found.".red) }
+                    } else {
+                        logActiveBotStartupStatus(`${file} BOTNAME`, 'not found.', { failed: true })
+                    }
                 })
                 return result?.hostName === current ? result : false
             }
@@ -46,7 +58,7 @@ const thisBotFunctions = {
                 const activeBot = config.botTypes.find(bot => bot.botName === mode);
                 const indexNum = config.botTypes.indexOf(activeBot);
                 config.botTypes[indexNum].active = true
-                console.log("[STARTUP]".yellow,`${thisBotFunctions.botIdent().activeBot.botName}`.green,"Development Mode:".bgRed,'✅')
+                logActiveBotStartupStatus('Development Mode', '✅')
                 return true
             }
             const whatBot = getFile(current)
@@ -101,7 +113,7 @@ const thisBotFunctions = {
     },
     deployCommands: async (commandsColl,REST,Routes,client) => {
 		try {
-            console.log("[STARTUP]".yellow, `${thisBotFunctions.botIdent().activeBot.botName}`.green,"Loading Commands:".magenta,"🕗")
+            logActiveBotStartupStatus('Loading Commands', '🕗')
             //Load Commands
 			let commands = [];
 			const commandFolders = fs.readdirSync('./commands');
@@ -144,7 +156,12 @@ const thisBotFunctions = {
 								}
 							}
 						}
-						catch (e) { console.log(e) }
+						catch (e) {
+							commandRegistrationReporter.error('Global command discovery failed', e, {
+								folder: thisFolderPath,
+								entry: file,
+							});
+						}
 						//Now that 'cmdGlobalPath' was established for global commands, move onto the recursive structure. 
 			
 			
@@ -218,8 +235,9 @@ const thisBotFunctions = {
                         }
                     }
                 } catch (e) {
-                    console.log("[STARTUP]".red, `${thisBotFunctions.botIdent().activeBot.botName}`.green, "Event Handler Registration Failure:".magenta, '⛔');
-                    console.error(e);
+                    eventRegistrationReporter.error('Handler registration failed', e, {
+                        directory,
+                    });
                 }
             }
 			const rest = new REST({version:10}).setToken(process.env.TOKEN);
@@ -233,7 +251,7 @@ const thisBotFunctions = {
 				{ body: commands },
 			);
 	
-			console.log("[STARTUP]".yellow,`${thisBotFunctions.botIdent().activeBot.botName}`.green,"Commands Registered:".magenta,'✅');
+			logActiveBotStartupStatus('Commands Registered', '✅');
 
 			function parseStaleGlobalCommandNames(commandNames) {
 				return String(commandNames ?? '')
@@ -250,15 +268,17 @@ const thisBotFunctions = {
 
 					for (const command of staleGlobalCommands) {
 						await rest.delete(Routes.applicationCommand(process.env.CLIENTID, command.id));
-						console.log("[STARTUP]".yellow, `${thisBotFunctions.botIdent().activeBot.botName}`.green, `Deleted stale global /${command.name} command:`.magenta, '✅');
+						commandRegistrationReporter.success('Stale global command deleted', {
+							command: command.name,
+						});
 					}
 				}
 				catch (error) {
-					console.error("[STARTUP]", `${thisBotFunctions.botIdent().activeBot.botName}`, 'Stale global command cleanup failed:', error);
+					commandRegistrationReporter.error('Stale global command cleanup failed', error);
 				}
 			}
 		} catch (error) {
-			console.error(error);
+			commandRegistrationReporter.error('Registration failed', error);
 		}
 	},
     generateDateTime: function() {

@@ -2,7 +2,7 @@
 
 const database = require('../database');
 const encryption = require('../encryption/applicationEncryption');
-const { createLoggingSettingsRepository } = require('../../../loggingSettings/repository');
+const { createLoggingSettingsRepository } = require('../../../logging/loggingSettings/repository');
 
 module.exports = createLoggingSettingsRepository({
     database,

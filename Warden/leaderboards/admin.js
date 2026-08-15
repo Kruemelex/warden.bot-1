@@ -220,7 +220,7 @@ async function syncWebsite(interaction) {
 
 async function reconcilePosts(interaction) {
     await interaction.deferUpdate();
-    const result = await reconcilePendingLeaderboardApprovals(interaction.guild);
+    const result = await reconcilePendingLeaderboardApprovals(interaction.guild, { reason: 'manual' });
     return interaction.followUp({
         content: `✅ Approval-post refresh completed${result.reconciled ? ` (${result.reconciled} pending post${result.reconciled === 1 ? '' : 's'})` : ''}.`,
         flags: Discord.MessageFlags.Ephemeral,
