@@ -9,6 +9,9 @@ const { calculateAceScore, shipDataTable } = require('./aceScoreCalculator')
 const { findAceApproved } = require('../../../Warden/db/leaderboards/repository')
 const { createLeaderboardSubmission } = require('./leaderboardSubmission')
 const { assertLeaderboardSubmissionAllowed, isLeaderboardAvailabilityError } = require('../../../Warden/leaderboards/policy')
+const { createConsoleReporter } = require('../../../logging/consoleReporting')
+
+const report = createConsoleReporter('Leaderboard').forSubsystem('Commands')
 /*
 Damage threshold entry:
 "Interceptor name" : {
@@ -274,14 +277,14 @@ module.exports = {
                     await interaction.editReply({
                         content: `✅ Submission #${submissionId} recorded. It is now up for review by Staff.`,
                     }).catch((responseError) => {
-                        console.error('Failed to send the Ace submission acknowledgement:', responseError)
+                        report.error('Ace submission acknowledgement failed', responseError, { submissionId })
                     })
                 }
                 catch (err) {
 					if (isLeaderboardAvailabilityError(err)) {
 						return interaction.editReply({ content: `⏳ ${err.message}` })
 					}
-                    console.log(err)
+					report.error('Ace submission failed', err, { submissionId })
                     void Promise.resolve().then(() => botLog(
                         interaction.guild,
                         new Discord.EmbedBuilder()
@@ -289,14 +292,14 @@ module.exports = {
                             .setTitle(`⛔ Ace submission failed`),
                         2,
                         'error',
-                    )).catch((logError) => console.error('Failed to log Ace submission error:', logError))
+                    )).catch((logError) => report.error('Discord error report failed', logError, { submissionId }))
 
                     const recordedId = submissionId ?? err.submissionId
                     const content = recordedId
                         ? `⚠️ Submission #${recordedId} was recorded, but Warden could not finish posting all confirmation messages. Please do not resubmit it; contact Staff.`
                         : '❌ Warden could not create the submission. Please try again or contact Staff.'
                     return interaction.editReply({ content }).catch((responseError) => {
-                        console.error('Failed to send the Ace submission error response:', responseError)
+                        report.error('Ace error response failed', responseError, { submissionId: recordedId })
                     })
                 }
             }

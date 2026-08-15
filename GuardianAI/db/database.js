@@ -1,6 +1,10 @@
 const { botIdent } = require('../../functions');
 if (botIdent().activeBot.botName == 'GuardianAI') {
     const mysql = require('mysql2');
+    const {
+        createConsoleReporter,
+        logConsoleStartupStatus,
+    } = require('../../logging/consoleReporting');
     require("dotenv").config({ path: `../../${botIdent().activeBot.env}` });
 
     let options = { timeZone: 'America/New_York', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
@@ -25,12 +29,14 @@ if (botIdent().activeBot.botName == 'GuardianAI') {
     };
     let pool;
     let connection;
+    const report = createConsoleReporter('Database').forSubsystem('Connection');
+    const schemaReport = createConsoleReporter('Database').forSubsystem('Schema');
     if (process.env.MODE == 'PROD') {
-        console.log("[STARTUP]".yellow,`${botIdent().activeBot.botName}`.green,"Loading Database Functions:".magenta,'✅');
+        logConsoleStartupStatus(botIdent().activeBot.botName, 'Loading Database Functions', '✅');
         createPool();
     }
     else {
-        console.log("[STARTUP]".yellow,`${botIdent().activeBot.botName}`.green,"Loading Test Server Database Functions:".cyan,'✅');
+        logConsoleStartupStatus(botIdent().activeBot.botName, 'Loading Test Server Database Functions', '✅');
         createPool('dbtest');
     }
     async function createPool(testdb) {
@@ -38,9 +44,9 @@ if (botIdent().activeBot.botName == 'GuardianAI') {
         else { pool = mysql.createPool(dbConfig); }
     
         pool.on('error', (err) => {
-            console.error('Database pool error:', err);
+            report.error('Connection pool error', err);
             if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-                console.log('Attempting to reconnect...');
+                report.neutral('Connection-pool replacement requested', { reason: err.code });
                 createPool();
             } else {
                 throw err;
@@ -121,12 +127,11 @@ if (botIdent().activeBot.botName == 'GuardianAI') {
                 `;
                 const opord_table_insert_row0_response = await query(opord_table_insert_row0_sql, opord_table_insert_row0_values)
                 if (opord_table_insert_row0_response) {
-                    console.log("[STARTUP]".yellow, `${botIdent().activeBot.botName}`.green, "Creating OPORD Table:".magenta, '✅');
+                    schemaReport.success('OPORD table created');
                 }
             }
         } catch (e) {
-            console.error("[STARTUP]".yellow, `${botIdent().activeBot.botName}`.green, "Creating OPORD Table Fail:".magenta, '❌');
-            console.error(e);
+            schemaReport.error('OPORD table creation failed', e);
         }
     }
     async function carrier_jumpChecks() {
@@ -149,12 +154,11 @@ if (botIdent().activeBot.botName == 'GuardianAI') {
                 `;
                 const carrier_jump_table_insert_row0_response = await query(carrier_jump_table_insert_row0_sql, carrier_jump_table_insert_row0_values)
                 if (carrier_jump_table_insert_row0_response) {
-                    console.log("[STARTUP]".yellow, `${botIdent().activeBot.botName}`.green, "Creating carrier_jump Table:".magenta, '✅');
+                    schemaReport.success('carrier_jump table created');
                 }
             }
         } catch (e) {
-            console.error("[STARTUP]".yellow, `${botIdent().activeBot.botName}`.green, "Creating carrier_jump Table Fail:".magenta, '❌');
-            console.error(e);
+            schemaReport.error('carrier_jump table creation failed', e);
         }
     }
     module.exports = { pool, query };

@@ -1,8 +1,10 @@
 const Discord = require("discord.js")
 const { botLog } = require('../../../functions');
 const { listAceBoard, listSpeedrunBoard } = require('../../../Warden/db/leaderboards/repository')
+const { createConsoleReporter } = require('../../../logging/consoleReporting')
 const { buildSpeedrunEmbed } = require('./leaderboardPresentation')
 const { createPersonalSpeedrunHistory } = require('./personalLeaderboardPagination')
+const report = createConsoleReporter('Leaderboard').forSubsystem('Commands')
 function timeConvertTT(timetaken) {
 	const hours = Math.floor(timetaken / 3600);
 	const minutes = Math.floor((timetaken % 3600) / 60);
@@ -34,9 +36,9 @@ function logLeaderboardError(interaction, err) {
 		Promise.resolve(botLog(interaction.guild, new Discord.EmbedBuilder()
 			.setDescription('```' + String(err.stack ?? err) + '```')
 			.setTitle('⛔ Fatal error experienced'), 2, 'error'))
-			.catch(logError => console.log(logError))
+			.catch(logError => report.error('Discord error report failed', logError))
 	} catch (logError) {
-		console.log(logError)
+		report.error('Discord error report failed', logError)
 	}
 }
 module.exports = {
@@ -135,7 +137,7 @@ data: new Discord.SlashCommandBuilder()
 				}
 			}
 			catch (err) {
-				console.log(err)
+				report.error('Speedrun board load failed', err, { variant, shipClass })
 				await interaction.editReply({ content: 'Unable to load the speedrun leaderboard right now. Please try again later.' })
 				logLeaderboardError(interaction, err)
 			}
@@ -177,7 +179,7 @@ data: new Discord.SlashCommandBuilder()
 				}
 			}
 			catch (err) {
-				console.log(err)
+				report.error('Ace board load failed', err, { shipClass: discordConvert.shipClass })
 				await interaction.editReply({ content: 'Unable to load the ace leaderboard right now. Please try again later.' })
 				logLeaderboardError(interaction, err)
 			}

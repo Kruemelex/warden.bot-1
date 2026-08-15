@@ -4,7 +4,7 @@ const {
     botIdent,
     getIdentityBrandColor,
     registerBotLogDestinationResolver,
-} = require('../functions');
+} = require('../../functions');
 
 const DESTINATION_KEYS = Object.freeze({
     Warden: Object.freeze(['general', 'error', 'staff', 'approvals', 'users', 'messages']),
@@ -35,7 +35,7 @@ function getProfile() {
 function getStore() {
     const { botName } = getProfile();
     if (!activeStore || activeStoreBotName !== botName) {
-        activeStore = require(`../${botName}/db/logging`);
+        activeStore = require(`../../${botName}/db/logging`);
         activeStoreBotName = botName;
     }
     return activeStore;

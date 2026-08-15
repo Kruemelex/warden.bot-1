@@ -1,7 +1,7 @@
 'use strict';
 
 const { buildApprovalMessage } = require('./leaderboardApprovalMessages');
-const { getLeaderboardApprovalChannelId } = require('../../../loggingSettings/service');
+const { getLeaderboardApprovalChannelId } = require('../../../logging/loggingSettings/service');
 const {
     insertSubmission,
     setApprovalMessageId,

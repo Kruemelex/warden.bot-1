@@ -115,15 +115,22 @@ function createConsoleReporter(feature, {
 
 function logConsoleStartupStatus(botName, label, status, {
     failed = false,
+    error,
     sink = console,
 } = {}) {
-    const method = failed ? 'error' : 'log';
-    sink[method](
-        failed ? colors.red('[STARTUP]') : colors.yellow('[STARTUP]'),
+    const method = failed || error !== undefined ? 'error' : 'log';
+    const output = sink[method];
+    if (typeof output !== 'function') {
+        throw new TypeError(`Startup console sink does not support ${method}.`);
+    }
+    const args = [
+        colors.yellow('[STARTUP]'),
         colors.green(String(botName)),
         colors.magenta(`${normalizeLabel(label, 'startup label')}:`),
         status,
-    );
+    ];
+    if (error !== undefined) args.push(error);
+    output.apply(sink, args);
 }
 
 module.exports = {

@@ -1,7 +1,7 @@
 'use strict';
 
 const Discord = require('discord.js');
-const { execute } = require('../../../loggingSettings');
+const { execute } = require('../../../logging/loggingSettings');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()

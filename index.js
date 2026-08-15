@@ -65,7 +65,7 @@ const Discord = require("discord.js")
 const { REST } = require('@discordjs/rest')
 const { Routes } = require('discord-api-types/v10')
 const botFunc = require('./functions.js')
-const { logConsoleStartupStatus } = require('./consoleReporting')
+const { createConsoleReporter, logConsoleStartupStatus } = require('./logging/consoleReporting')
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path')
@@ -92,7 +92,7 @@ const os = require('os');
  * @author testfax (Medi0cre) @testfax
  */
 if (botFunc.adjustActive(os.hostname(),type)) {
-	console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Hostname Retrieved:".magenta,`${os.hostname()}`.yellow)
+	logConsoleStartupStatus(botFunc.botIdent().activeBot.botName, 'Hostname Retrieved', `${os.hostname()}`.yellow)
 	mainOperation()  
 }
 //Separated to provide control over execution during hostname retrieval.
@@ -137,7 +137,7 @@ function mainOperation(){
 	let commandsColl = bot.commands = new Discord.Collection()
 
 	bot.once(Discord.Events.ClientReady, async() => {
-		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Login Process Completed:".magenta,`✅`)
+		logConsoleStartupStatus(botFunc.botIdent().activeBot.botName, 'Login Process Completed', '✅')
 		await botFunc.deployCommands(commandsColl,REST,Routes,bot)
 		const configuredGuildId = process.env.GUILDID || botFunc.botIdent().activeBot.guildId
 		const guild = bot.guilds.cache.get(configuredGuildId) ?? bot.guilds.cache.first()
@@ -147,7 +147,10 @@ function mainOperation(){
 		const wardenLeaderboards = activeBotName === 'Warden'
 			? require('./Warden/leaderboards')
 			: undefined
-		const loggingSettings = require('./loggingSettings')
+		const leaderboardLifecycleReport = activeBotName === 'Warden'
+			? createConsoleReporter('Leaderboard').forSubsystem('Lifecycle')
+			: undefined
+		const loggingSettings = require('./logging/loggingSettings')
 		try {
 			await loggingSettings.initializeLoggingSettings({
 				guild,
@@ -155,11 +158,13 @@ function mainOperation(){
 			})
 			logConsoleStartupStatus(activeBotName, 'Logging Settings', '✅')
 			void botFunc.botLog(bot,new Discord.EmbedBuilder().setDescription(`💡 ${bot.user.username} online! logged in as ${bot.user.tag}\n - Cache cleared`).setTitle(`${bot.user.username} Online`),0)
-				.catch((error) => console.error(error));
+				.catch((error) => console.error(error))
 		}
 		catch (err) {
-			logConsoleStartupStatus(activeBotName, 'Logging Settings', '❌', { failed: true })
-			console.error(err)
+			logConsoleStartupStatus(activeBotName, 'Logging Settings', '❌', {
+				failed: true,
+				error: err,
+			})
 		}
         
 		if (activeBotName == 'GuardianAI') {
@@ -185,14 +190,14 @@ function mainOperation(){
 			if(process.env.MODE == "PROD") {
 				try {
 					const { reconcilePendingLeaderboardApprovals } = require('./commands/Warden/leaderboards/staffApproval/reconciliation')
-					await reconcilePendingLeaderboardApprovals(guild)
+					await reconcilePendingLeaderboardApprovals(guild, { reason: 'startup' })
 				}
 				catch (err) {
-					console.error('Leaderboard reconciliation failed:', err)
+					leaderboardLifecycleReport.error('Startup reconciliation failed', err)
 					void Promise.resolve(botFunc.botLog(guild, new Discord.EmbedBuilder()
 						.setDescription('```' + err.stack + '```')
-						.setTitle('⛔ Fatal error experienced: reconcilePendingLeaderboards()'), 2, 'error'))
-						.catch((logError) => console.error('Failed to log Leaderboard reconciliation error:', logError))
+						.setTitle('⛔ Leaderboard startup reconciliation failed'), 2, 'error'))
+						.catch((logError) => leaderboardLifecycleReport.error('Discord error report failed', logError))
 				}
 
 				// Scheduled Role Backup Task
@@ -228,15 +233,11 @@ function mainOperation(){
 				// }, the_interval);
 				}
 			}
-		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Bot has Loaded In:".magenta,'✅');
+		logConsoleStartupStatus(activeBotName, 'Bot has Loaded In', '✅');
 		if (wardenLeaderboards) {
 			void Promise.resolve().then(async () => {
-				const result = await wardenLeaderboards.initializeLeaderboardWebsite({
-					guild,
-					guildId: configuredGuildId,
-				})
-				if (result?.skipped !== 'unconfigured') console.log('Leaderboard website startup sync completed.')
-			}).catch((err) => console.error('Leaderboard website startup sync failed:', err))
+				await wardenLeaderboards.initializeLeaderboardWebsite({ guild, guildId: configuredGuildId })
+			}).catch((err) => leaderboardLifecycleReport.warn('Website startup sync failed', err))
 		}
 	})
 	if (process.env.MODE != "PROD") {
@@ -287,7 +288,7 @@ function mainOperation(){
 		else { console.log("[ENV]".red,"ERROR".bgRed,"ENV file Malformed or Missing".yellow); return false }
 	}
 	if (checkENV(process.env.TOKEN)) { 
-		console.log("[STARTUP]".yellow,`${botFunc.botIdent().activeBot.botName}`.green,"Initiating Login Process:".magenta,`🕗`)
+		logConsoleStartupStatus(botFunc.botIdent().activeBot.botName, 'Initiating Login Process', '🕗')
 		bot.login(process.env.TOKEN)
 	}
 	// General error handling

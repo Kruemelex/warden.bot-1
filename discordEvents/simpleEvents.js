@@ -3,33 +3,77 @@ const Discord = require('discord.js')
 const database = require(`../${botIdent().activeBot.botName}/db/database`)
 const config = require('../config.json')
 
-const MESSAGE_FIELD_CONTENT_LIMIT = 1000
+const MESSAGE_EMBED_DESCRIPTION_LIMIT = 4096
 
 function neutralizeCodeFences(value) {
     const text = typeof value === 'string' ? value : String(value || '')
-    return text.replace(/`{3,}/g, match => match.slice(0, 2) + '\u200b' + match.slice(2))
+    return text.replace(/`{3,}/g, match => match.replace(/``/g, '``\u200b'))
 }
 
 function wrapCodeBlock(content) {
     return `\`\`\`\n${content}\n\`\`\``
 }
 
-function chunkText(value, limit) {
-    const text = typeof value === 'string' ? value : String(value || '')
-    if (!text) return ['']
+function buildCopyableMessageEmbeds({
+    title,
+    searchableText,
+    contentLabel,
+    content,
+    author,
+    messageLink,
+}) {
+    const embeds = []
+    const normalizedContent = neutralizeCodeFences(content)
+    const codeBlockOverhead = wrapCodeBlock('').length
+    let position = 0
+    let page = 1
 
-    const chunks = []
-    for (let index = 0; index < text.length; index += limit) {
-        chunks.push(text.slice(index, index + limit))
+    while (position < normalizedContent.length || page === 1) {
+        const label = page === 1
+            ? contentLabel
+            : `${contentLabel} (continued ${page})`
+        const header = `${searchableText}\n\n**${label}:**\n`
+        const messageLinkFooter = messageLink ? `\n\n**Message Link:** ${messageLink}` : ''
+        const chunkLimit = MESSAGE_EMBED_DESCRIPTION_LIMIT
+            - header.length
+            - codeBlockOverhead
+            - messageLinkFooter.length
+
+        if (chunkLimit < 1) {
+            throw new Error('Message log metadata exceeds the Discord embed description limit.')
+        }
+
+        const chunk = normalizedContent.slice(position, position + chunkLimit)
+        const isFinalChunk = position + chunk.length >= normalizedContent.length
+        const description = `${header}${wrapCodeBlock(chunk)}${isFinalChunk ? messageLinkFooter : ''}`
+        const embed = new Discord.EmbedBuilder()
+            .setTitle(page === 1 ? title : `${title} (continued ${page})`)
+            .setDescription(description)
+            .setAuthor(author)
+
+        embeds.push(embed)
+        position += chunk.length
+        page += 1
     }
-    return chunks
+
+    return embeds
 }
 
-function buildCopyableMessageFields(label, content) {
-    return chunkText(neutralizeCodeFences(content), MESSAGE_FIELD_CONTENT_LIMIT).map((chunk, index) => ({
-        name: index === 0 ? label : `${label} (cont. ${index + 1})`,
-        value: wrapCodeBlock(chunk),
-    }))
+function buildMessageAuthorHeader(message) {
+    const author = message?.author
+    const member = message?.member
+        ?? message?.guild?.members?.cache?.get?.(author?.id)
+    const name = member?.displayName
+        ?? author?.globalName
+        ?? author?.username
+        ?? author?.tag
+        ?? 'Unknown message author'
+    const iconURL = typeof member?.displayAvatarURL === 'function'
+        ? member.displayAvatarURL({ dynamic: true })
+        : typeof author?.displayAvatarURL === 'function'
+            ? author.displayAvatarURL({ dynamic: true })
+            : undefined
+    return iconURL ? { name, iconURL } : { name }
 }
 
 
@@ -960,19 +1004,21 @@ const exp = {
 
                 const deletedByValue = deletedBy?.id ? `<@${deletedBy.id}>` : String(deletedBy ?? 'Unknown')
                 const authorValue = authorId ? `<@${authorId}>` : 'Unknown'
-                const deletedEmbed = new Discord.EmbedBuilder()
-                    .setTitle(`Message Deleted 🗑️`)
-                    .setDescription(`Message deleted by user: ${deletedByValue}\nMessage Author: ${authorValue}`)
-                    .addFields(
-                        { name: 'By User', value: deletedByValue },
-                        { name: 'Author', value: authorValue },
-                        ...buildCopyableMessageFields('Message', messageContent),
+                const deletedEmbeds = buildCopyableMessageEmbeds({
+                    title: 'Message Deleted 🗑️',
+                    searchableText: `Message deleted by user: ${deletedByValue}\nMessage Author: ${authorValue}`,
+                    contentLabel: 'Message',
+                    content: messageContent,
+                    author: buildMessageAuthorHeader(message),
+                })
+
+                for (const embed of deletedEmbeds) {
+                    botLog(message.guild,
+                        embed,
+                        1,
+                        'messages',
                     )
-                botLog(message.guild,
-                    deletedEmbed,
-                    1,
-                    'messages',
-                )
+                }
             }
         } catch (error) {
             console.error("Error fetching audit logs:", error)
@@ -1001,30 +1047,30 @@ const exp = {
             const rawNew = typeof newMessage?.content === 'string' ? newMessage.content : ''
             if (rawOld === rawNew) return
 
-            let oldContent = neutralizeCodeFences(
-            typeof oldMessage?.content === 'string' ? oldMessage.content : ''
-            )
-            let newContent = neutralizeCodeFences(
-            typeof newMessage?.content === 'string' ? newMessage.content : ''
-            )
+            let oldContent = typeof oldMessage?.content === 'string' ? oldMessage.content : ''
+            let newContent = typeof newMessage?.content === 'string' ? newMessage.content : ''
 
             if (!newContent) newContent = 'No new content.'
             if (!oldMessage || oldMessage.partial || !oldContent) oldContent = 'Bot: Cache Unvailable'
 
             const updatedByValue = `<@${newMessage.author.id}>`
-            const fields = [{ name: 'By User', value: updatedByValue }]
-            const oldEmbeds = [new Discord.EmbedBuilder()
-                .setTitle('Message Updated 📝')
-                .setDescription(`Message updated by user: ${updatedByValue}`)
-                .addFields(...fields, ...buildCopyableMessageFields('Old Message', oldContent))]
-            const newEmbeds = [new Discord.EmbedBuilder()
-                .setTitle('Message Updated 📝')
-                .setDescription(`Message updated by user: ${updatedByValue}`)
-                .addFields(
-                    ...fields,
-                    ...buildCopyableMessageFields('New Message', newContent),
-                    { name: 'Message Link', value: newMessage.url },
-                )]
+            const messageAuthor = buildMessageAuthorHeader(newMessage)
+            const searchableText = `Message updated by user: ${updatedByValue}`
+            const oldEmbeds = buildCopyableMessageEmbeds({
+                title: 'Message Updated 📝',
+                searchableText,
+                contentLabel: 'Old Message',
+                content: oldContent,
+                author: messageAuthor,
+            })
+            const newEmbeds = buildCopyableMessageEmbeds({
+                title: 'Message Updated 📝',
+                searchableText,
+                contentLabel: 'New Message',
+                content: newContent,
+                author: messageAuthor,
+                messageLink: newMessage.url,
+            })
 
             // Send them in order
             for (const e of oldEmbeds) {

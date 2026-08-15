@@ -3,6 +3,10 @@ const { botIdent } = require('../../functions')
 if (botIdent().activeBot.botName == 'Warden') {
     const mysql = require('mysql2')
     const {
+        createConsoleReporter,
+        logConsoleStartupStatus,
+    } = require('../../logging/consoleReporting')
+    const {
         isRetryableDatabaseRead,
         retryTransientDatabaseOperation,
     } = require('./errorPolicy')
@@ -12,6 +16,8 @@ if (botIdent().activeBot.botName == 'Warden') {
     const DB_QUERY_TIMEOUT_MS = 15_000
     const DB_KEEPALIVE_INTERVAL_MS = 10 * 60 * 1000
     const DB_KEEPALIVE_RETRY_DELAY_MS = 1_000
+    const DB_READ_MAX_ATTEMPTS = 3
+    const report = createConsoleReporter('Database').forSubsystem('Connection')
 
     const dbConfig = {
         host: process.env.DATABASE_URL,
@@ -46,10 +52,10 @@ if (botIdent().activeBot.botName == 'Warden') {
     let pool
 
     if (process.env.MODE == 'PROD') {
-        console.log("[STARTUP]".yellow,`${botIdent().activeBot.botName}`.green,"Loading Database Functions:".magenta,'✅')
+        logConsoleStartupStatus(botIdent().activeBot.botName, 'Loading Database Functions', '✅')
         pool = createPool(dbConfig)
     } else {
-        console.log("[STARTUP]".yellow,`${botIdent().activeBot.botName}`.green,"Loading Test Server Database Functions:".cyan,'✅')
+        logConsoleStartupStatus(botIdent().activeBot.botName, 'Loading Test Server Database Functions', '✅')
         pool = createPool(testdbConfig)
     }
 
@@ -59,32 +65,26 @@ if (botIdent().activeBot.botName == 'Warden') {
     }, DB_KEEPALIVE_INTERVAL_MS)
     keepAliveTimer.unref?.()
 
-    function formatDuration(ms) {
-        return ms >= 1_000 ? `${(ms / 1_000).toFixed(1)}s` : `${ms}ms`
-    }
-
     async function runDatabaseKeepAlive() {
-        const startedAt = Date.now()
         try {
-            const result = await retryTransientDatabaseOperation(
+            await retryTransientDatabaseOperation(
                 () => query('SELECT 1', undefined, { retryTransientReads: false }),
-                { retryDelayMs: DB_KEEPALIVE_RETRY_DELAY_MS },
+                {
+                    retryDelayMs: DB_KEEPALIVE_RETRY_DELAY_MS,
+                    maxAttempts: DB_READ_MAX_ATTEMPTS,
+                    backoffMultiplier: 2,
+                },
             )
-            const duration = formatDuration(Date.now() - startedAt)
-            if (result.retried) {
-                console.info(`[DATABASE] Keepalive connection recovered after retry (${duration}).`)
-            } else if (keepAliveUnavailable) {
-                console.info('[DATABASE] Keepalive connection restored.')
-            }
+            if (keepAliveUnavailable) report.success('Keepalive connection restored')
             keepAliveUnavailable = false
         }
         catch (err) {
-            keepAliveUnavailable = true
-            if (err?.databaseRetryAttempted) {
-                console.error('[DATABASE] Keepalive connection failed after retry:', err)
-            } else {
-                console.error('[DATABASE] Keepalive connection failed:', err)
+            if (!keepAliveUnavailable) {
+                report.error('Keepalive connection unavailable after retries', err, {
+                    attempts: err?.databaseRetryAttempts ?? 1,
+                })
             }
+            keepAliveUnavailable = true
         }
     }
 
@@ -93,7 +93,7 @@ if (botIdent().activeBot.botName == 'Warden') {
         createdPool.on('error', (err) => {
             // mysql2 pools discard failed connections and establish replacements
             // for later acquisitions. Throwing here would terminate the bot.
-            console.error('Database pool error:', err)
+            report.error('Connection pool error', err)
         })
         return createdPool
     }
@@ -152,7 +152,11 @@ if (botIdent().activeBot.botName == 'Warden') {
         }
         const result = await retryTransientDatabaseOperation(
             () => executeQueryOnce(sql, values),
-            { retryDelayMs: options.retryDelayMs ?? DB_KEEPALIVE_RETRY_DELAY_MS },
+            {
+                retryDelayMs: options.retryDelayMs ?? DB_KEEPALIVE_RETRY_DELAY_MS,
+                maxAttempts: options.maxAttempts ?? DB_READ_MAX_ATTEMPTS,
+                backoffMultiplier: options.backoffMultiplier ?? 2,
+            },
         )
         return result.value
     }
