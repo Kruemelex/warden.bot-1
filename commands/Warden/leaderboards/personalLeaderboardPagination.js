@@ -4,9 +4,11 @@ const Discord = require('discord.js');
 const { createPanelSessionRegistry } = require('../../../ux/interactions/sessions');
 const { createInteractionRouter } = require('../../../ux/interactions/router');
 const { listSpeedrunBoard } = require('../../../Warden/db/leaderboards/repository');
+const { createConsoleReporter } = require('../../../logging/consoleReporting');
 const { buildSpeedrunEmbed } = require('./leaderboardPresentation');
 
 const PAGE_SIZE = 10;
+const report = createConsoleReporter('Leaderboard').forSubsystem('Commands');
 const sessions = createPanelSessionRegistry({
     prefix: 'lH',
     label: 'Personal Leaderboard history',
@@ -105,7 +107,7 @@ const router = createInteractionRouter({
         interaction, 'This private Leaderboard history expired. Run `/leaderboard speedrun` again.',
     ),
     onComponentError: async ({ interaction, error }) => {
-        console.error('Failed to change personal Leaderboard history page:', error);
+        report.error('Personal history page refresh failed', error);
         return privateResponse(interaction, 'Unable to load that Leaderboard page right now. Please try again later.');
     },
     onModalError: async ({ interaction }) => privateResponse(interaction, 'That action is not available.'),

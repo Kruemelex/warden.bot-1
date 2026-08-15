@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent, botLog } = require('../../functions');
+const { botIdent, botLog, getIdentityBrandColor } = require('../../functions');
 const config = require('../../config.json');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -17,7 +17,7 @@ module.exports = {
     
             let returnEmbed = new Discord.EmbedBuilder()
                 .setTitle(`${botIdent().activeBot.communityName} Private Group`)
-                .setColor('#FF7100')
+                .setColor(getIdentityBrandColor())
                 .setAuthor({ name: botIdent().activeBot.botName, iconURL: botIdent().activeBot.icon })
                 .setThumbnail(botIdent().activeBot.icon)
                 .setDescription(

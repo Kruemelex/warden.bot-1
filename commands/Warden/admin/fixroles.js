@@ -9,9 +9,9 @@ module.exports = {
     .setDefaultMemberPermissions(Discord.PermissionFlagsBits.Administrator),
     // permissions: 0, //probably dont need due to Administrator flag being set, slash command isn't even available to the public.
     async execute (interaction) {
-        interaction.deferReply()
+        await interaction.deferReply()
         try {
-            interaction.channel.send({ content: "Processing, this may take a while."})
+            await interaction.editReply({ content: "Processing, this may take a while."})
             let updated = 0
             let count = 0
             // const role = config[botIdent().activeBot.botName].operation_order.opord_channel_await
@@ -30,7 +30,7 @@ module.exports = {
                 }
             }
 
-            interaction.editReply({ content: `Stage 1 Complete, ${count} processed total, ${updated} recruits fixed`})
+            await interaction.editReply({ content: `Stage 1 Complete, ${count} processed total, ${updated} recruits fixed`})
             
             // Fix Leftover Recruits on Apollos + Seperators
             updated = 0
@@ -41,7 +41,7 @@ module.exports = {
                 if (value.roles.cache.find(r => r.id === "380247760668065802")) { await value.roles.remove("380247760668065802"); updated++ }
                 count++;
             }
-            interaction.channel.send({ content: `Stage 2 Complete, ${count} processed total, ${updated} roles fixed, starting Stage 2...`})
+            await interaction.channel.send({ content: `Stage 2 Complete, ${count} processed total, ${updated} roles fixed, starting Stage 3...`})
 
             // Fix Seperators on Recruits
             updated = 0
@@ -51,10 +51,15 @@ module.exports = {
                 if (!value.roles.cache.find(r => r.id === "642840406580658218")) { await value.roles.add("642840406580658218"); updated++ }
                 count++;
             }
-            interaction.channel.send({ content: `Stage 3 Complete, ${count} processed total. ${updated} roles updated.`})
+            await interaction.channel.send({ content: `Stage 3 Complete, ${count} processed total. ${updated} roles updated.`})
             
         } catch (err) {
             console.error(err)
+            try {
+                await interaction.editReply({ content: "Unable to finish fixing roles right now. Please try again later." })
+            } catch (editError) {
+                console.error(editError)
+            }
         }
     }
 }

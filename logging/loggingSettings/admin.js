@@ -1,21 +1,21 @@
 'use strict';
 
 const Discord = require('discord.js');
-const { createAdminPanelDocument } = require('../ux/documents');
-const { renderComponentsV2 } = require('../ux/renderers/componentsV2');
-const { createPanelSessionRegistry } = require('../ux/interactions/sessions');
-const { createInteractionRouter } = require('../ux/interactions/router');
+const { createAdminPanelDocument } = require('../../ux/documents');
+const { renderComponentsV2 } = require('../../ux/renderers/componentsV2');
+const { createPanelSessionRegistry } = require('../../ux/interactions/sessions');
+const { createInteractionRouter } = require('../../ux/interactions/router');
 const {
     acknowledgePanelInteraction,
     deferEphemeralReply,
     respondAfterAcknowledgement,
     sanitizeMessageEditOptions,
-} = require('../ux/interactions/acknowledgement');
+} = require('../../ux/interactions/acknowledgement');
 const {
     buildModal,
     buildModalChannelSelectField,
     getModalSelectedChannel,
-} = require('../ux/components/modalFields');
+} = require('../../ux/components/modalFields');
 const {
     assertConfiguredGuild,
     getCached,

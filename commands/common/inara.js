@@ -1,4 +1,4 @@
-const { botIdent } = require('../../functions');
+const { botIdent, getIdentityBrandColor } = require('../../functions');
 const Discord = require("discord.js");
 
 module.exports = {
@@ -53,7 +53,7 @@ module.exports = {
 					let response = JSON.parse(d); //prints inara's output to the node console, process it further here
 					var cmdr = response.events[0].eventData
 					const returnEmbed = new Discord.EmbedBuilder()
-					.setColor('#FF7100')
+						.setColor(getIdentityBrandColor())
 					.setTitle(`CMDR ${cmdr.userName}`)
 					//TODO This footer causes the code to fail at the current moment. .setFooter(`${cmdr.userName}`, cmdr.avatarImageURL)
 					if (cmdr.preferredGameRole != undefined) { returnEmbed.addFields([{ name: "Role", value: `${cmdr.preferredGameRole}` }]) }

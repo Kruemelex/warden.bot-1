@@ -1,6 +1,7 @@
 'use strict';
 
 const Discord = require('discord.js');
+const { createConsoleReporter } = require('../../../../logging/consoleReporting');
 const { botLog } = require('../../../../functions');
 const { buildModal } = require('../../../../ux/components/modalFields');
 const { createDescriptorModalEditor } = require('../../../../ux/interactions/editor');
@@ -21,6 +22,9 @@ const repository = require('../../../../Warden/db/leaderboards/repository');
 const { getLeaderboard, getSubmissionId } = repository;
 const { assertLeaderboardMutationAllowed } = require('../../../../Warden/leaderboards/policy');
 const { publishApprovedSubmission } = require('../../../../Warden/leaderboards/websitePublisher');
+
+const websiteReport = createConsoleReporter('Leaderboard').forSubsystem('Website');
+const staffApprovalReport = createConsoleReporter('Leaderboard').forSubsystem('Staff approval');
 
 const sessionRegistry = createPanelSessionRegistry({
     prefix: 'wLA',
@@ -140,7 +144,10 @@ const descriptorEditor = createDescriptorModalEditor({
             );
         }
         catch (error) {
-            console.error('No Leaderboard changes were needed, but approval post refresh failed:', error);
+            staffApprovalReport.error('Approval post refresh failed after unchanged edit', error, {
+                leaderboard: context.leaderboard,
+                submissionId: context.submissionId,
+            });
             return respondEphemeral(
                 interaction,
                 '⚠️ No database changes were needed, but the Staff approval post could not be refreshed.',
@@ -160,7 +167,10 @@ const descriptorEditor = createDescriptorModalEditor({
         }
         catch (error) {
             approvalRefreshError = error;
-            console.error('Leaderboard changes saved, but approval post refresh failed:', error);
+            staffApprovalReport.error('Approval post refresh failed after edit', error, {
+                leaderboard: context.leaderboard,
+                submissionId: context.submissionId,
+            });
         }
 
         let panelRefreshError;
@@ -177,7 +187,10 @@ const descriptorEditor = createDescriptorModalEditor({
         catch (error) {
             nextSession?.dispose();
             panelRefreshError = error;
-            console.warn('Failed to refresh Leaderboard editor panel:', error);
+            staffApprovalReport.warn('Editor panel refresh failed', error, {
+                leaderboard: context.leaderboard,
+                submissionId: context.submissionId,
+            });
         }
 
         const message = approvalRefreshError
@@ -239,7 +252,7 @@ const interactionRouter = createInteractionRouter({
         `⛔ ${error.message || 'Failed to open the Leaderboard editor.'}`,
     ),
     onModalError: ({ interaction, parsed, error }) => {
-        console.error('Leaderboard editor modal failed:', error);
+        staffApprovalReport.error('Editor modal failed', error);
         return respondEphemeral(
             interaction,
             `⛔ ${error.message || 'Failed to save the Leaderboard edit.'}`,
@@ -267,7 +280,7 @@ async function openEditor(interaction, leaderboard, submissionId) {
     }
     catch (error) {
         session?.dispose();
-        console.error('Failed to open Leaderboard editor:', error);
+        staffApprovalReport.error('Editor open failed', error, { leaderboard, submissionId });
         return respondEphemeral(interaction, `⛔ ${error.message || 'Failed to open the Leaderboard editor.'}`);
     }
     return undefined;
@@ -282,7 +295,10 @@ async function notifySubmitter(interaction, submission, approved, leaderboard) {
         await user.send(message);
     }
     catch (error) {
-        console.warn(`Could not notify user for ${leaderboard} submission #${submission.id}:`, error);
+        staffApprovalReport.warn('Submitter notification failed', error, {
+            leaderboard,
+            submissionId: submission.id,
+        });
     }
 }
 
@@ -294,7 +310,9 @@ async function maybeNotifyMyrmidon(interaction, submission) {
     if (Number(submission.time) >= Number(thresholds[submission.class])) return;
     await interaction.channel.send({
         content: `Hey, ${interaction.member}!\n**Speedrun submission #${submission.id}** is eligible for **Myrmidon**. Please contact <@${submission.user_id}> to see if they want the rank.`,
-    }).catch((error) => console.warn('Could not send Myrmidon eligibility notice:', error));
+    }).catch((error) => staffApprovalReport.warn('Myrmidon eligibility notice failed', error, {
+        submissionId: submission.id,
+    }));
 }
 
 async function editResolvedApprovalPost(interaction, payload, resolvedState) {
@@ -327,7 +345,10 @@ async function approveSubmission(interaction, context) {
     if (newlyApproved) await notifySubmitter(interaction, submission, true, leaderboard, context);
     if (newlyApproved) {
         void publishApprovedSubmission(context.guildId, leaderboard, submission)
-            .catch((error) => console.error('Leaderboard website approval sync failed:', error));
+            .catch((error) => websiteReport.warn('Approval sync failed', error, {
+                leaderboard,
+                submissionId: submission.id,
+            }));
     }
     if (refreshError) throw refreshError;
 }
@@ -417,7 +438,11 @@ async function handleApprovalAction(interaction, leaderboard, action, submission
         });
     }
     catch (error) {
-        console.error('Leaderboard approval action failed:', error);
+        staffApprovalReport.error('Approval action failed', error, {
+            action,
+            leaderboard,
+            submissionId,
+        });
         if (error.code !== 'LEADERBOARD_POST_REFRESH_FAILED') {
             void Promise.resolve().then(() => botLog(
                 interaction.guild,
@@ -427,12 +452,20 @@ async function handleApprovalAction(interaction, leaderboard, action, submission
                 2,
                 'error',
             ))
-                .catch((logError) => console.error('Failed to log Leaderboard approval error:', logError));
+                .catch((logError) => staffApprovalReport.error('Discord error report failed', logError, {
+                    action,
+                    leaderboard,
+                    submissionId,
+                }));
         }
         await interaction.followUp({
             content: `⛔ ${error.message || 'The Leaderboard action failed. Please try again.'}`,
             flags: Discord.MessageFlags.Ephemeral,
-        }).catch((responseError) => console.error('Failed to send Leaderboard action error:', responseError));
+        }).catch((responseError) => staffApprovalReport.error('Staff error response failed', responseError, {
+            action,
+            leaderboard,
+            submissionId,
+        }));
     }
 }
 

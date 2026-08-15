@@ -92,6 +92,17 @@
                 "Ambassador"
             ]
         },
+        "membersCommand": {
+            "allowed_rank_categories": [
+                "challenge_ranks",
+                "competitive_ranks",
+                "other_ranks"
+            ],
+            "allowed_ranks": [],
+            "disallowed_ranks": [
+                "Party Survivor"
+            ]
+        },
         "channels": {
             "privateGroupRules": "1329847548763967488"
         },

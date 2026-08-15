@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent,botLog,hasSpecifiedRole } = require('../../../functions');
+const { botIdent,botLog,hasSpecifiedRole,getIdentityBrandColor } = require('../../../functions');
 const config = require('../../../config.json')
 const colors = require('colors')
 
@@ -98,7 +98,7 @@ module.exports = {
             
             if (haveSkillRanks_memberList.length > 0 || dontHaveSkillRanks_memberList.length > 0) {
                 const embed = new Discord.EmbedBuilder()
-                .setColor('#FF7100')
+                .setColor(getIdentityBrandColor())
                 .setTitle('Evaluated Roles')
                 .setDescription('This command gives role dividers and ensures basic roles; XSF Ranks and Skill Ranks.')
                 .addFields(

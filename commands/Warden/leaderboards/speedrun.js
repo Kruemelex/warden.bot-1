@@ -4,6 +4,9 @@ const ships = require('./ships.json')
 const { findSpeedrunBest } = require('../../../Warden/db/leaderboards/repository')
 const { createLeaderboardSubmission } = require('./leaderboardSubmission')
 const { assertLeaderboardSubmissionAllowed, isLeaderboardAvailabilityError } = require('../../../Warden/leaderboards/policy')
+const { createConsoleReporter } = require('../../../logging/consoleReporting')
+
+const report = createConsoleReporter('Leaderboard').forSubsystem('Commands')
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -145,7 +148,7 @@ module.exports = {
 			if (isLeaderboardAvailabilityError(err)) {
 				return interaction.editReply({ content: `⏳ ${err.message}` })
 			}
-			console.log(err)
+			report.error('Speedrun submission failed', err, { submissionId })
 			botLog(interaction.guild,new Discord.EmbedBuilder()
 				.setDescription('```' + err.stack + '```')
 				.setTitle(`⛔ Speedrun submission failed`)
@@ -158,7 +161,7 @@ module.exports = {
 				? `⚠️ Submission #${recordedId} was recorded, but Warden could not finish posting all confirmation messages. Please do not resubmit it; contact Staff.`
 				: '❌ Warden could not create the submission. Please try again or contact Staff.'
 			return interaction.editReply({ content }).catch((responseError) => {
-				console.error('Failed to send the Speedrun submission error response:', responseError)
+				report.error('Speedrun error response failed', responseError, { submissionId: recordedId })
 			})
 		}
 	    }
