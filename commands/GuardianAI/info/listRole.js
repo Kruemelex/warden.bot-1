@@ -1,5 +1,11 @@
 const Discord = require("discord.js");
-const { botIdent,cleanString,botLog,hasSpecifiedRole,getIdentityBrandColor } = require('../../../functions');
+const {
+    botIdent,
+    cleanString,
+    botLog,
+    hasSpecifiedRole,
+    getIdentityBrandColor,
+} = require('../../../functions');
 const config = require('../../../config.json')
 //todo Not setup for Warden.
 //todo Warden uses /ranks
@@ -84,6 +90,7 @@ module.exports = {
             roles = clean_args
             const returnEmbed = new Discord.EmbedBuilder()
             .setColor(getIdentityBrandColor())
+            returnEmbed.setTimestamp()
             interaction.guild.members.cache.each(member => {
                 if (!member.user.bot) { 
                     let memberroles = member._roles
@@ -134,7 +141,7 @@ module.exports = {
                     {name:"Members with the following roles:",value:"```" + role_names_sorted_string + "```"},
                     {name:"Count",value:"```" + count + "```"}
                 )
-                interaction.followUp({ embeds: [returnEmbed.setTimestamp()] })
+                interaction.followUp({ embeds: [returnEmbed] })
             }
             if (interaction.options.getSubcommand() === 'nickname') {
                 returnEmbed.setTitle(`**Names of Cross of N roles**`)
@@ -144,7 +151,7 @@ module.exports = {
                         {name:"Members with the following roles:",value:"```" + role_names_sorted_string + "```"},
                         {name:"No members were found!",value:"** **"},
                     )
-                    interaction.followUp({ embeds: [returnEmbed.setTimestamp()] }) 
+                    interaction.followUp({ embeds: [returnEmbed] })
                 }
                 else {
                     returnEmbed.addFields(
@@ -156,7 +163,7 @@ module.exports = {
                             returnEmbed.addFields({ name: `Users`, value: lists[i].join(""), inline: true });
                         }
                     }
-                    interaction.followUp({ embeds: [returnEmbed.setTimestamp()] })
+                    interaction.followUp({ embeds: [returnEmbed] })
                 }
             }
             if (interaction.options.getSubcommand() === 'role_info') {

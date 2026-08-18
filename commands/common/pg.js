@@ -1,5 +1,10 @@
 const Discord = require("discord.js");
-const { botIdent, botLog, getIdentityBrandColor } = require('../../functions');
+const {
+    botIdent,
+    botLog,
+    getIdentityBrandColor,
+    getIdentityEmbedAuthor,
+} = require('../../functions');
 const config = require('../../config.json');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -18,7 +23,7 @@ module.exports = {
             let returnEmbed = new Discord.EmbedBuilder()
                 .setTitle(`${botIdent().activeBot.communityName} Private Group`)
                 .setColor(getIdentityBrandColor())
-                .setAuthor({ name: botIdent().activeBot.botName, iconURL: botIdent().activeBot.icon })
+                .setAuthor(getIdentityEmbedAuthor())
                 .setThumbnail(botIdent().activeBot.icon)
                 .setDescription(
                     `**How to join the Private Group**\n` +
@@ -28,11 +33,10 @@ module.exports = {
                     `4. The Request will be automatically approved\n` +
                     `5. Return to the menu, select Start > Private Group > ${botIdent().activeBot.communityName} > Join Group\n`
                 )
-                .setFooter({ text: `Joining ${botIdent().activeBot.communityName} Private Group`, iconURL: botIdent().activeBot.icon });
             if (rulesChannelId) {
                 returnEmbed.addFields({ name: "Rules:", value: `Please read the Private Group Rules before joining: <#${rulesChannelId.id}>`, inline: false })
             }
-            interaction.reply({ embeds: [returnEmbed] })
+            interaction.reply({ embeds: [returnEmbed.setTimestamp()] })
         }
         catch (err) {
             console.log(err)

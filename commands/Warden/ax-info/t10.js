@@ -1,5 +1,8 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions');
+const {
+    getIdentityBrandColor,
+    getIdentityEmbedAuthor,
+} = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`t10`)
@@ -9,7 +12,8 @@ module.exports = {
     execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Type-10 Defender')
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setColor(getIdentityBrandColor())
+        .setAuthor(getIdentityEmbedAuthor())
         .setThumbnail('https://cdn.discordapp.com/attachments/865043404479791135/1063689199695429632/t10_crossout.png')
         .setDescription(`~~T10 is traaaaaaaaaaash~~
         T10 is generally considered one of the worst possible ships for Anti-Xeno combat, especially versus Interceptors, despite what its description might imply. Reasons for this are numerous and will take quite long to explain in detail. If you have specific questions, our Mentors will be glad to answer them.
@@ -21,7 +25,6 @@ module.exports = {
         - Type-X ships (Obviously)
         
         Ask a <@&468153018899234816> if you would like to know more about why these ships are so terrible for AX.`)
-        .setFooter({ text: 'Just dont do it....', iconURL: botIdent().activeBot.icon });
-        interaction.reply({embeds: [returnEmbed]})
+        interaction.reply({embeds: [returnEmbed.setTimestamp()]})
     }
 }

@@ -1,4 +1,5 @@
 const Discord = require('discord.js');
+const { getCommunityEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -7,8 +8,9 @@ module.exports = {
     permissions: 0,
     execute(interaction) {
         const embed = new Discord.EmbedBuilder()
-            .setColor('#FF7100')
+            .setColor(getIdentityBrandColor())
             .setTitle('Prebuilt AX Chieftain')
+            .setAuthor(getCommunityEmbedAuthor())
             .setThumbnail('https://cdn.discordapp.com/emojis/1538679230102110298.webp?size=256')
             .setDescription(
                 'The AX Combat Jumpstart Chieftain from the ARX-Store tries to cover too many AX roles at once, making it perform poorly in any one role.\n\n'

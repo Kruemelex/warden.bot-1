@@ -1,4 +1,5 @@
 const Discord = require("discord.js");
+const { getCommunityEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -8,8 +9,9 @@ module.exports = {
     permissions: 0,
     execute(interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
-        .setColor('#FF7100')
+        .setColor(getIdentityBrandColor())
         .setTitle("**NHSS Types**")
+        .setAuthor(getCommunityEmbedAuthor())
         .addFields({ name: "You can semi consistently determine NHSS in nebulae contents based on their threat rating:", value: "Threat 3: 2 Scouts + 0-3 Human ships\nThreat 4: 4-7 Scouts + 0-3 Human ships\nThreat 5: 1 Cyclops OR 4-8 Scouts\nThreat 6: 1 Basilisk OR 1 Cyclops + 4 Scouts OR 12 Scouts\nThreat 7: 1 Medusa OR 1 Basilisk + 4 Scouts\nThreat 8: 1 Hydra OR 1 Medusa + 4 Scouts\nThreat 9: 1 Hydra + 4 Scouts" })
         .addFields({name: "Spawns are more random in war systems.", value: "NHSS can only be consistently predicted in nebulae, and war systems spawns are random."})
         .addFields({ name: "If a Nonhuman Signal Source has a Salvage Icon (cylinder) in the navigation panel, it will always be a solo Thargoid Interceptor.", value: "Click the button below for more." })

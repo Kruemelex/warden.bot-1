@@ -1,5 +1,8 @@
 const Discord = require("discord.js");
-const { getIdentityBrandColor } = require('../../functions');
+const {
+    getIdentityBrandColor,
+    getIdentityEmbedAuthor,
+} = require('../../functions');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -27,6 +30,7 @@ module.exports = {
         if (args.mats == 'encoded') {
             returnEmbed = new Discord.EmbedBuilder()
                 .setColor(getIdentityBrandColor())
+                .setAuthor(getIdentityEmbedAuthor())
                 .setTitle(`Encoded Material Farming`)
                 .setDescription(`Recommended method:\n- Scanning Comms Control beacons at the Jameson Crash Site in HIP 12099 1B and cross-trading at an Encoded trader is a reliable way to farm the necessary Encoded materials for engineering.\n- If more specific Encoded materials are needed, use the sources given in the table below.`)
                 .setImage('https://cdn.discordapp.com/attachments/1174547681453015140/1182964374520991765/MatsEncoded.png?ex=65869c6d&is=6574276d&hm=515d1f4046d4452bc5277969c54e83b9c85f8cfa301ba26e105e8fbff9c6115a&')
@@ -37,6 +41,7 @@ module.exports = {
         if (args.mats == 'raw') {
         returnEmbed = new Discord.EmbedBuilder()
             .setColor(getIdentityBrandColor())
+            .setAuthor(getIdentityEmbedAuthor())
             .setTitle(`Raw Material Farming`)
             .setDescription(`Recommended method:\n- At the material sites given in the table below, use the Remote Release Flak Launcher and Collector Limpets to efficiently gather materials as shown in [this video guide](https://www.youtube.com/watch?v=oLSUiZyQvoI).\n- Use the [Compass Panel](https://github.com/EDDiscovery/EDDiscovery/wiki/Using-the-Compass-Panel) in [EDDiscovery](https://github.com/EDDiscovery/EDDiscovery/wiki) for help navigating to planetary coordinates.\n- Alternatively, probe the planet with a Detailed Surface Scanner and fly to "blue zones," regions of high concentration of Crystal Shards or Brain Trees.`)
             .setImage('https://cdn.discordapp.com/attachments/1174547681453015140/1181763630136565772/MatsRaw.png?ex=65823e25&is=656fc925&hm=a54f1a495b47ab155388c08c0d21cd479df2f612ed27e640358973fb7d74bb88&')
@@ -46,6 +51,7 @@ module.exports = {
         if (args.mats == 'manufactured') {
         returnEmbed = new Discord.EmbedBuilder()
             .setColor(getIdentityBrandColor())
+            .setAuthor(getIdentityEmbedAuthor())
             .setTitle(`Manufactured Material Farming`)
             .setDescription(`Recommended method:`)
             .addFields(

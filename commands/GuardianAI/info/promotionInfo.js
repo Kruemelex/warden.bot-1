@@ -38,7 +38,7 @@ module.exports = {
                     .addFields(
                         { name: "Generic Promotion Information", value: "https://xenostrikeforce.com/?page_id=1274", inline: true }
                     )
-            await interaction.editReply({ embeds: [returnEmbed] })
+            await interaction.editReply({ embeds: [returnEmbed.setTimestamp()] })
         }
     }
 }

@@ -80,6 +80,6 @@ module.exports = {
                 {name: 'Code to paste somewhere', value: time_unformatted, inline: false},
             )
         // await interaction.guild.channels.cache.find(c => c.id === interaction.channelId).send(`${time}`)
-        await interaction.editReply({ content: `Action Complete`, embeds:[embed], ephemeral: true });
+        await interaction.editReply({ content: `Action Complete`, embeds:[embed.setTimestamp()], ephemeral: true });
     }
 }

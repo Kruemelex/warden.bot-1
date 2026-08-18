@@ -1,4 +1,5 @@
 const Discord = require("discord.js");
+const { getCommunityEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -8,8 +9,9 @@ module.exports = {
     permissions: 0,
     execute(interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
-        .setColor('#FF7100')
+        .setColor(getIdentityBrandColor())
         .setTitle("**AX Ship Build Repository**")
+        .setAuthor(getCommunityEmbedAuthor())
         .setDescription(`A large repository of good AX builds for all ships. Please note that many of these builds are not beginner friendly, and require good knowledge of AX mechanics to pilot.`)
         .addFields(
             {name: "Build Repository", value: "https://wiki.antixenoinitiative.com/en/buildrepository"},

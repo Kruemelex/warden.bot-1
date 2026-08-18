@@ -1,4 +1,5 @@
 const Discord = require("discord.js");
+const { getIdentityBrandColor, getIdentityEmbedAuthor } = require('../../../functions');
 const graphicdata = require("./graphdata.json");
 
 var data = new Discord.SlashCommandBuilder()
@@ -32,8 +33,9 @@ module.exports = {
             interaction.reply(response.link);
         } else if (response.type == "embed") {
             const returnEmbed = new Discord.EmbedBuilder()
-            .setColor('#FF7100')
+            .setColor(getIdentityBrandColor())
             .setTitle(response.title)
+            .setAuthor(getIdentityEmbedAuthor())
             .setDescription(response.description)
             .setImage(response.link)
             interaction.reply({ embeds: [returnEmbed.setTimestamp()] });

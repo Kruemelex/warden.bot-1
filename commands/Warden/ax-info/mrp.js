@@ -1,5 +1,8 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions');
+const {
+    getIdentityBrandColor,
+    getIdentityEmbedAuthor,
+} = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`mrp`)
@@ -9,8 +12,8 @@ module.exports = {
     execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Using Module Reinforcement Packages')
-        .setColor('#FF7100')
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setColor(getIdentityBrandColor())
+        .setAuthor(getIdentityEmbedAuthor())
         .setThumbnail('https://static.wikia.nocookie.net/elite-dangerous/images/9/96/MRP.png/revision/latest?cb=20170114223512')
         .setDescription(`Multiple MRPs will combine their module protection %, but always take damage in a set order:
 
@@ -22,7 +25,6 @@ module.exports = {
         The GMRP can be engineered with Anti-Guardian Zone Resistance at the engineer Ram Tah in Meene
         
         - Always ensure your largest MRP is in an optional slot (and not a military one) or your module protection will be compromised much sooner.`)
-        .setFooter({ text: 'Module Reinforcement Package', iconURL: botIdent().activeBot.icon });
-        interaction.reply({embeds: [returnEmbed]})
+        interaction.reply({embeds: [returnEmbed.setTimestamp()]})
     }
 }

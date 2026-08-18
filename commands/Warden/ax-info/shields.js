@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions');
+const { getIdentityBrandColor, getIdentityEmbedAuthor } = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`shields`)
@@ -40,8 +40,8 @@ module.exports = {
         }
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Usage of shields on small and medium ships')
-        .setColor('#FF7100')
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setColor(getIdentityBrandColor())
+        .setAuthor(getIdentityEmbedAuthor())
         .setDescription(message)
         interaction.reply({embeds: [returnEmbed.setTimestamp()]})
     }

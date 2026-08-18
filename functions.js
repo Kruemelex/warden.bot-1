@@ -12,6 +12,36 @@ function logActiveBotStartupStatus(label, status, options) {
     const botName = thisBotFunctions.botIdent().activeBot?.botName ?? 'Unknown bot';
     return logConsoleStartupStatus(botName, label, status, options);
 }
+
+function resolveConfiguredBotIdentity(botName) {
+    const identity = botName
+        ? config.botTypes.find((bot) => bot.botName === botName)
+        : thisBotFunctions.botIdent().activeBot
+    if (!identity) {
+        if (botName) throw new Error(`Unknown bot identity "${botName}".`)
+        throw new Error('No active bot identity is configured.')
+    }
+    return identity
+}
+
+function requireNonEmptyIdentityValue(identity, fieldName) {
+    const value = String(identity?.[fieldName] ?? '').trim()
+    if (!value) {
+        throw new Error(`${identity?.botName ?? 'Active bot'} requires a non-empty ${fieldName}.`)
+    }
+    return value
+}
+
+function requireHttpsIdentityUrl(identity, fieldName) {
+    const value = requireNonEmptyIdentityValue(identity, fieldName)
+    try {
+        if (new URL(value).protocol !== 'https:') throw new Error('not HTTPS')
+    } catch {
+        throw new Error(`${identity?.botName ?? 'Active bot'} requires a valid HTTPS ${fieldName}.`)
+    }
+    return value
+}
+
 //This functions.js file serves as a global functions context for all bots that may reuse the same code.
 /**
  * @author (testfax) Medi0cr3 @testfax
@@ -93,6 +123,21 @@ const thisBotFunctions = {
             throw new Error(`${activeBot?.botName ?? 'Active bot'} requires a valid identityBrandColor.`)
         }
         return color
+    },
+    getIdentityEmbedAuthor: function(botName) {
+        const identity = resolveConfiguredBotIdentity(botName)
+        return {
+            name: requireNonEmptyIdentityValue(identity, 'botName'),
+            iconURL: requireHttpsIdentityUrl(identity, 'icon'),
+        }
+    },
+    getCommunityEmbedAuthor: function(botName) {
+        const identity = resolveConfiguredBotIdentity(botName)
+        return {
+            name: requireNonEmptyIdentityValue(identity, 'communityName'),
+            iconURL: requireHttpsIdentityUrl(identity, 'communityIcon'),
+            url: requireHttpsIdentityUrl(identity, 'communityLink'),
+        }
     },
     fileNameBotMatch: function(e) {
         //This only works, because the codebase is not one of the matching bot names. Case-Sensitive.
