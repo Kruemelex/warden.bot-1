@@ -201,7 +201,7 @@ module.exports = {
                     const role = interaction.guild.roles.resolve(rank.id)
                     embed.addFields({ name: `${role.name}`, value: rankVALUE, inline: true })
                 })
-                await interaction.followUp({embeds: [embed]});
+                await interaction.followUp({embeds: [embed.setTimestamp()]});
             }
         }
         if (interaction.options.getSubcommand() === 'names') {
@@ -307,8 +307,8 @@ module.exports = {
                         embed.addFields({ name: Object.keys(rank)[0], value: rankVALUE, inline: true })
                     })
                 })
-                if (state == 1) { await interaction.followUp({embeds: [embed]}) }
-                if (state == 2) { await interaction.followUp({embeds: [embed], ephemeral: false }) }
+                if (state == 1) { await interaction.followUp({embeds: [embed.setTimestamp()]}) }
+                if (state == 2) { await interaction.followUp({embeds: [embed.setTimestamp()], ephemeral: false }) }
             }
         }
     }

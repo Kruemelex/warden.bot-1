@@ -55,7 +55,6 @@ module.exports = {
 					const returnEmbed = new Discord.EmbedBuilder()
 						.setColor(getIdentityBrandColor())
 					.setTitle(`CMDR ${cmdr.userName}`)
-					//TODO This footer causes the code to fail at the current moment. .setFooter(`${cmdr.userName}`, cmdr.avatarImageURL)
 					if (cmdr.preferredGameRole != undefined) { returnEmbed.addFields([{ name: "Role", value: `${cmdr.preferredGameRole}` }]) }
 					if (cmdr.preferredAllegianceName != undefined) { returnEmbed.addFields({ name:"Allegiance", value:`${cmdr.preferredAllegianceName}`, inline: true, }) }
 					if (cmdr.preferredPowerName != undefined) { returnEmbed.addFields({ name: "Power", value: `${cmdr.preferredPowerName}`, inline: true }) }
@@ -65,7 +64,7 @@ module.exports = {
 					}
 					if (cmdr.inaraURL != undefined) { returnEmbed.addFields({ name: "Link", value: `${cmdr.inaraURL}`, inline: true }) }
 
-					interaction.reply({ embeds: [returnEmbed.setTimestamp()] });
+                    interaction.reply({ embeds: [returnEmbed.setTimestamp()] });
 				})
 			})
 

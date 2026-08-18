@@ -2,7 +2,11 @@
 
 const Discord = require('discord.js');
 const config = require('../../../config.json');
-const { botIdent, getIdentityBrandColor } = require('../../../functions');
+const {
+    botIdent,
+    getIdentityBrandColor,
+    getIdentityEmbedAuthor,
+} = require('../../../functions');
 const { createConsoleReporter } = require('../../../logging/consoleReporting');
 const { createRankStatsChartUrl } = require('./rankStatsChart');
 
@@ -80,11 +84,11 @@ function buildRankEmbed(rankType, roleCache, memberCounts, chartUrl) {
     const embed = new Discord.EmbedBuilder()
         .setColor(getIdentityBrandColor())
         .setTitle(`${category.label} Ranks`)
+        .setAuthor(getIdentityEmbedAuthor())
         .setDescription(`${category.label} rank statistics`)
-        .addFields(getRanks(rankType, roleCache, memberCounts))
-        .setTimestamp();
+        .addFields(getRanks(rankType, roleCache, memberCounts));
     if (chartUrl) embed.setImage(chartUrl);
-    return embed;
+    return embed.setTimestamp();
 }
 
 function getSelectedRankCategory(interaction) {
