@@ -2,7 +2,11 @@
 
 const Discord = require('discord.js');
 const config = require('../../../config.json');
-const { cleanString } = require('../../../functions');
+const {
+    cleanString,
+    getIdentityBrandColor,
+    getIdentityEmbedAuthor,
+} = require('../../../functions');
 const {
     RoleMemberCache,
     RoleMemberCacheError,
@@ -166,14 +170,14 @@ module.exports = {
             const embedValue = values.join('\n');
             if (records.length <= maxLength && embedValue.length <= 1024) {
                 const returnEmbed = new Discord.EmbedBuilder()
-                    .setColor('#FF7100')
+                    .setColor(getIdentityBrandColor())
                     .setTitle('**Member List**')
+                    .setAuthor(getIdentityEmbedAuthor())
                     .addFields({
                         name: `List of members holding rank ${actualRole}:`,
                         value: `**${embedValue}**`,
                     })
-                    .setTimestamp();
-                return interaction.editReply({ embeds: [returnEmbed] });
+                return interaction.editReply({ embeds: [returnEmbed.setTimestamp()] });
             }
 
             return interaction.editReply({

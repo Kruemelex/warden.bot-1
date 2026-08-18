@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions');
+const { getIdentityBrandColor, getIdentityEmbedAuthor } = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`preengineered`)
@@ -10,7 +10,8 @@ module.exports = {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Pre-Engineered Modules')
         .setURL('https://wiki.antixenoinitiative.com/en/weapons')
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setColor(getIdentityBrandColor())
+        .setAuthor(getIdentityEmbedAuthor())
         .setDescription(`It should be noted that **all pre-engineered modules require materials for each purchase**. Unlock costs for these can be found on Inara's crafting section.`)
         .addFields(
             {name: "Modified Guardian Weapons, Azimuth EAXMC", value: "Available at `Prospect's Deep`, a planetary port found in the `Mbooni` system. You will need a permit to access Mbooni, which can be earned through raising standings to Allied with Azimuth Biotech. You may need to visit the `Glorious Prospect` in `LHS 1163`.", inline: false},

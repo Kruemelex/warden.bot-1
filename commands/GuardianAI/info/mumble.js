@@ -1,5 +1,9 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions');
+const {
+    botIdent,
+    getCommunityEmbedAuthor,
+    getIdentityBrandColor,
+} = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`mumble`)
@@ -16,7 +20,8 @@ module.exports = {
         
                 const returnEmbed = new Discord.EmbedBuilder()
                 .setTitle('Xeno Strike Force Mumble Server')
-                .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+                .setColor(getIdentityBrandColor())
+                .setAuthor(getCommunityEmbedAuthor())
                 .setThumbnail(botIdent().activeBot.icon)
                 .setDescription(`Individually Linked Wing Communications`)
                 .addFields(

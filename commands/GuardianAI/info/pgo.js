@@ -1,5 +1,9 @@
 const Discord = require("discord.js");
-const { botIdent, getIdentityBrandColor } = require('../../../functions');
+const {
+    botIdent,
+    getCommunityEmbedAuthor,
+    getIdentityBrandColor,
+} = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`pgo`)
@@ -8,7 +12,7 @@ module.exports = {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle(`XSF Official private group`)
         .setColor(getIdentityBrandColor())
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setAuthor(getCommunityEmbedAuthor())
         .setThumbnail(botIdent().activeBot.icon)
         .setDescription(`**How to join the Private Group**
                             1. Open the Social Menu (Menu > Social)
@@ -19,8 +23,7 @@ module.exports = {
                             Its also recommended to send a friend request to "XSF Official" incase the PG gets locked down.
                             `
                             
-                        )
-        .setFooter({ text: `Joining XSF Official private group`, iconURL: botIdent().activeBot.icon });
-        interaction.reply({embeds: [returnEmbed]})
+        )
+        interaction.reply({embeds: [returnEmbed.setTimestamp()]})
     }
 }

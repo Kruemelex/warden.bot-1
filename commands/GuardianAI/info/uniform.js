@@ -1,5 +1,9 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions');
+const {
+    botIdent,
+    getCommunityEmbedAuthor,
+    getIdentityBrandColor,
+} = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`uniform`)
@@ -8,7 +12,8 @@ module.exports = {
     execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Our Uniform')
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setColor(getIdentityBrandColor())
+        .setAuthor(getCommunityEmbedAuthor())
         .setThumbnail(botIdent().activeBot.icon)
         .setDescription(`Active-duty XSF CMDRs are expected to maintain ships and on-foot suits conforming with our livery regulation. Follow the link to the website for more information.`)
         const buttonRow = new Discord.ActionRowBuilder()

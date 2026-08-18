@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions')
+const { getIdentityBrandColor, getIdentityEmbedAuthor } = require('../../../functions')
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`engineering`)
@@ -9,7 +9,8 @@ module.exports = {
     execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Resources on Engineering')
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setColor(getIdentityBrandColor())
+        .setAuthor(getIdentityEmbedAuthor())
         .setThumbnail("https://edassets.org/static/img/engineers/Engineer_icon.png")
         .addFields(
             {name: "AXI Engineer Unlock Guide", value: "https://wiki.antixenoinitiative.com/en/Unlocking-Engineers\nAXI's guide for unlocking engineers and how to engineer."},

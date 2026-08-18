@@ -1,4 +1,5 @@
 const Discord = require('discord.js');
+const { getCommunityEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
 
 
 module.exports = {
@@ -9,10 +10,10 @@ module.exports = {
     permissions:0,
     async execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
-		.setColor('#FF7100')
+		.setColor(getIdentityBrandColor())
 		.setTitle("**How to Submit for Ranks**")
 		.setImage('https://axicloud.blob.core.windows.net/public/images/km2_explosion.png')
-		.setAuthor({ name: 'Anti-Xeno Initiative', iconURL: 'https://axicloud.blob.core.windows.net/public/images/AXI_Insignia_Hypen_128.png', url: 'https://antixenoinitiative.com' })
+		.setAuthor(getCommunityEmbedAuthor())
 		.setDescription(`Once you have your evidence, either a screenshot or a video, you can post it in the #tea-and-medals channels, where it will be reviewed by staff.
 
 **We ask you do not ping anyone to review your submission, it will be processed when possible.** If your submission was not processed within 48 hours, you are allowed to contact a staff member about it.
@@ -22,6 +23,6 @@ The proof has to be a **screenshot**, or a **video** (in some cases we may requi
 For more information, please visit the AXI ranks page on our website: https://antixenoinitiative.com/ranks`)
         
 
-        interaction.channel.send({ embeds: [returnEmbed] });
+        return interaction.reply({ embeds: [returnEmbed.setTimestamp()] });
     }
 }

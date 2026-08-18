@@ -39,6 +39,6 @@ module.exports = {
             // console.error('Error fetching user:'.red, error);
             embed.addFields({name: `Entry -> ${args.number}`, value: "Unknown User"})
         }
-        await interaction.editReply({ embeds:[embed], ephemeral: true });
+        await interaction.editReply({ embeds:[embed.setTimestamp()], ephemeral: true });
     }
 }

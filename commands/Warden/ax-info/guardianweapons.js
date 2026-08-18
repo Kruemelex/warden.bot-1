@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { botIdent } = require('../../../functions');
+const { getIdentityBrandColor, getIdentityEmbedAuthor } = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`guardianweapons`)
@@ -9,8 +9,8 @@ module.exports = {
     execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Guardian Weapons')
-        .setColor('#FF7100')
-        .setAuthor({name: botIdent().activeBot.botName,iconURL: botIdent().activeBot.icon})
+        .setColor(getIdentityBrandColor())
+        .setAuthor(getIdentityEmbedAuthor())
         .setDescription(`Information on Guardian Weapons`)
         .addFields(
             {name: 'Gauss'                                 , value: 'Hitscan weapon that deals high armor piercing damage and kill hearts quickly. Used in class 1 and class 2 sizes', inline: false},
@@ -23,6 +23,6 @@ module.exports = {
             {name: 'Available at'                          , value: 'Prospect\'s Deep in the Mbooni system', inline: false},
             {name: 'Blueprint Materials'                   , value: 'Modified Guardian weapons require **Guardian Weapon Blueprints** with **each** purchase', inline: false},     
         )
-        interaction.reply({embeds: [returnEmbed]})
+        interaction.reply({embeds: [returnEmbed.setTimestamp()]})
     }
 }
