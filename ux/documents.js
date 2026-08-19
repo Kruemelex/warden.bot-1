@@ -10,6 +10,7 @@ const BLOCK_KINDS = Object.freeze({
     actions: 'actions',
     gallery: 'gallery',
     group: 'group',
+    separator: 'separator',
     section: 'section',
     text: 'text',
 });
@@ -80,6 +81,13 @@ function normalizeEditorBlock(block) {
             throw new Error('UX group blocks require at least one child block.');
         }
         return { kind, blocks: block.blocks.map(normalizeEditorBlock) };
+    }
+    if (kind === BLOCK_KINDS.separator) {
+        return {
+            kind,
+            divider: block.divider !== false,
+            spacing: block.spacing ?? 'Large',
+        };
     }
     if (kind === BLOCK_KINDS.gallery) {
         const items = normalizeMediaItems(block.items);
