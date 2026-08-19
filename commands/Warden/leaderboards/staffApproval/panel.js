@@ -2,7 +2,7 @@
 
 const Discord = require('discord.js');
 const { getIdentityBrandColor } = require('../../../../functions');
-const { createAdminPanelDocument } = require('../../../../ux/documents');
+const { createUXPanelDocument } = require('../../../../ux/documents');
 const { formatSpeedrunTime } = require('../leaderboardApprovalMessages');
 
 const EDIT_ACTIONS = Object.freeze({
@@ -79,7 +79,7 @@ function createLeaderboardEditorDocument(context, submission, { buildActionCusto
         );
     }
 
-    return createAdminPanelDocument({
+    return createUXPanelDocument({
         title: `Edit ${context.leaderboard === 'ace' ? 'Ace' : 'Speedrun'} Submission #${submission.id}`,
         description: 'Changes are saved to the pending database row and then reflected on the Staff approval post.',
         accentColor: getIdentityBrandColor('Warden'),

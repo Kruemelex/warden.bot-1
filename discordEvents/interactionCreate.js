@@ -6,6 +6,7 @@ const config = require('../config.json')
 
 const Discord = require('discord.js')
 const { sendInitialInteractionResponse } = require('../ux/interactions/acknowledgement')
+const mttotCommand = require('../commands/Warden/math/mttot')
 // const { default: test }
 
 const DISCORD_INITIAL_RESPONSE_WINDOW_MS = 3_000
@@ -19,6 +20,9 @@ const handleLeaderboardSettingsInteraction = isWarden
     : undefined
 const handleRanksInteraction = isWarden
     ? require('../commands/Warden/info/ranks').handleInteraction
+    : undefined
+const handleMttotInteraction = mttotCommand.supportsMttotIdentity(botIdent().activeBot.botName)
+    ? mttotCommand.handleInteraction
     : undefined
 const handleLoggingSettingsInteraction = require('../logging/loggingSettings').handleInteraction
 
@@ -153,6 +157,7 @@ const exp = {
         if (handleLeaderboardSettingsInteraction && await handleLeaderboardSettingsInteraction(interaction)) return
         if (await handleLoggingSettingsInteraction(interaction)) return
         if (handleRanksInteraction && await handleRanksInteraction(interaction)) return
+        if (handleMttotInteraction && await handleMttotInteraction(interaction)) return
 
         if (interaction.isModalSubmit()) {
             if (botIdent().activeBot.botName == 'GuardianAI') {

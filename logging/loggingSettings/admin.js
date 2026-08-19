@@ -1,7 +1,7 @@
 'use strict';
 
 const Discord = require('discord.js');
-const { createAdminPanelDocument } = require('../../ux/documents');
+const { createUXPanelDocument } = require('../../ux/documents');
 const { renderComponentsV2 } = require('../../ux/renderers/componentsV2');
 const { createPanelSessionRegistry } = require('../../ux/interactions/sessions');
 const { createInteractionRouter } = require('../../ux/interactions/router');
@@ -120,7 +120,7 @@ function renderPanel(settings, ownerUserId, { markSuccess = false } = {}) {
     });
 
     const updated = formatUpdated(settings, markSuccess);
-    const document = createAdminPanelDocument({
+    const document = createUXPanelDocument({
         title: `${profile.botName} Logging Settings`,
         description: `Configure ${profile.botName}-owned logging channels per category.`,
         accentColor: profile.identityBrandColor,

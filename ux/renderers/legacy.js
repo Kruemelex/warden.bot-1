@@ -74,7 +74,7 @@ function buildNoticeEmbeds(document) {
 
 function editorBlockToEmbeds(block, document) {
     if (block.kind === 'group') return block.blocks.flatMap((child) => editorBlockToEmbeds(child, document));
-    if (block.kind === 'actions') return [];
+    if (block.kind === 'actions' || block.kind === 'separator') return [];
     if (block.kind === 'gallery') {
         return block.items.map((item) => {
             const embed = applyColor(new Discord.EmbedBuilder().setImage(item.url), document.accentColor);
@@ -86,7 +86,7 @@ function editorBlockToEmbeds(block, document) {
     return [applyColor(new Discord.EmbedBuilder().setDescription(truncateText(content, EMBED_DESCRIPTION_LIMIT)), document.accentColor)];
 }
 
-function buildAdminEmbeds(document) {
+function buildUXPanelEmbeds(document) {
     const summary = applyColor(new Discord.EmbedBuilder()
         .setTitle(truncateText(document.title, 256)), document.accentColor);
     if (document.description) summary.setDescription(truncateText(document.description, EMBED_DESCRIPTION_LIMIT));
@@ -142,7 +142,7 @@ function buildChallengeEmbeds(document) {
 }
 
 function collectActionRows(document) {
-    const editorRows = document.kind === 'admin-panel'
+    const editorRows = document.kind === 'ux-panel'
         ? document.editorBlocks.flatMap(function rows(block) {
             if (block.kind === 'actions') return block.rows;
             if (block.kind === 'group') return block.blocks.flatMap(rows);
@@ -157,7 +157,7 @@ function renderLegacy(document, { existingFlags = 0 } = {}) {
     getLayout(document?.kind);
     let embeds;
     if (document.kind === 'notice') embeds = buildNoticeEmbeds(document);
-    else if (document.kind === 'admin-panel') embeds = buildAdminEmbeds(document);
+    else if (document.kind === 'ux-panel') embeds = buildUXPanelEmbeds(document);
     else if (document.kind === 'challenge-screen') embeds = buildChallengeEmbeds(document);
     else throw new Error(`Unsupported legacy UX document: ${document.kind}`);
 

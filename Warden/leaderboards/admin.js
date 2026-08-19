@@ -2,7 +2,7 @@
 
 const Discord = require('discord.js');
 const { getIdentityBrandColor } = require('../../functions');
-const { createAdminPanelDocument } = require('../../ux/documents');
+const { createUXPanelDocument } = require('../../ux/documents');
 const { renderComponentsV2 } = require('../../ux/renderers/componentsV2');
 const { createPanelSessionRegistry } = require('../../ux/interactions/sessions');
 const { createInteractionRouter } = require('../../ux/interactions/router');
@@ -66,7 +66,7 @@ function renderPanel(current, ownerUserId, { markSuccess = false } = {}) {
         state: { settings: current },
     });
     const updated = formatUpdated(current, markSuccess);
-    const document = createAdminPanelDocument({
+    const document = createUXPanelDocument({
         title: 'Leaderboard Settings',
         description: 'Configure Leaderboard availability and website publishing.',
         accentColor: getIdentityBrandColor(),
