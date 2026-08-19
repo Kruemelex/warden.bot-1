@@ -6,7 +6,7 @@ const LAYOUTS = Object.freeze({
         separator: Object.freeze({ divider: true, spacing: 'Large' }),
         legacyOverflow: 'embed-pages',
     }),
-    'admin-panel': Object.freeze({
+    'ux-panel': Object.freeze({
         areas: Object.freeze(['summary', 'editor', 'controls']),
         separator: Object.freeze({ divider: true, spacing: 'Large' }),
         editorSeparator: Object.freeze({ divider: false, spacing: 'Large' }),

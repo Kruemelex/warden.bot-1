@@ -3,11 +3,16 @@
 const { randomBytes } = require('node:crypto');
 const Discord = require('discord.js');
 const { createConsoleReporter } = require('../../logging/consoleReporting');
-const { createAdminPanelDocument } = require('../../ux/documents');
+const { createUXPanelDocument } = require('../../ux/documents');
 const { buildLoadingComponents } = require('../../ux/components/state');
 const { renderComponentsV2 } = require('../../ux/renderers/componentsV2');
 const { createPanelSessionRegistry } = require('../../ux/interactions/sessions');
 const { createInteractionRouter } = require('../../ux/interactions/router');
+const { createReusablePanelPublisher } = require('../../ux/interactions/reusablePublication');
+const {
+    expectedInteractionError,
+    reportUnexpectedInteractionError,
+} = require('../../ux/interactions/errors');
 const {
     acknowledgePanelInteraction,
     completePanelInteraction,
@@ -19,8 +24,8 @@ const {
     buildModalStringSelectField,
     buildModalTextLabel,
     buildStringSelectComponent,
+    getModalSingleSelectValue,
     getModalTextInput,
-    getRequiredModalSingleSelect,
 } = require('../../ux/components/modalFields');
 const {
     INTERCEPTOR_OPTIONS,
@@ -245,68 +250,57 @@ function pendingWeaponBlock(flow, session) {
     const pending = flow.pendingWeapon;
     if (!pending) return null;
     const routeParts = ['pending', pending.token];
-
     const hasQuantity = Number.isInteger(pending.quantity);
     const hasSize = Boolean(pending.size);
     const hasMount = Boolean(pending.mount);
     const mountAvailable = hasQuantity && hasSize;
     const weaponAvailable = mountAvailable && hasMount;
-    const sizeOptions = eligibleSizeOptions(flow, pending.quantity ?? 1);
-    const mountOptions = mountAvailable
-        ? eligibleMountOptions(flow, pending.size, pending.quantity)
-        : unavailableOption('Select quantity and size first');
-    const weaponOptions = weaponAvailable
-        ? eligibleWeaponOptions(flow, pending.size, pending.mount, pending.quantity)
-        : unavailableOption('Select a mount type first');
-
+    const controls = [
+        {
+            action: 'weaponQuantity',
+            options: QUANTITY_OPTIONS,
+            placeholder: 'Choose quantity...',
+            selected: hasQuantity ? [String(pending.quantity)] : [],
+        },
+        {
+            action: 'weaponSize',
+            options: eligibleSizeOptions(flow, pending.quantity ?? 1),
+            placeholder: 'Choose weapon size...',
+            selected: hasSize ? [pending.size] : [],
+        },
+        {
+            action: 'mount',
+            disabled: !mountAvailable,
+            options: mountAvailable
+                ? eligibleMountOptions(flow, pending.size, pending.quantity)
+                : unavailableOption('Select quantity and size first'),
+            placeholder: mountAvailable ? 'Choose mount type...' : 'Select quantity and size first...',
+            selected: hasMount ? [pending.mount] : [],
+        },
+        {
+            action: 'weapon',
+            disabled: !weaponAvailable,
+            options: weaponAvailable
+                ? eligibleWeaponOptions(flow, pending.size, pending.mount, pending.quantity)
+                : unavailableOption('Select a mount type first'),
+            placeholder: weaponAvailable ? 'Choose weapon...' : 'Select a mount type first...',
+            selected: [],
+        },
+    ];
     return [
         { kind: 'text', content: '### Adding Weapons\nComplete the selections below.' },
-        {
+        ...controls.map((control) => ({
             kind: 'actions',
             rows: [selectRow(
                 session,
-                'weaponQuantity',
+                control.action,
                 routeParts,
-                'Choose quantity...',
-                QUANTITY_OPTIONS,
-                hasQuantity ? [String(pending.quantity)] : [],
+                control.placeholder,
+                control.options,
+                control.selected,
+                { disabled: Boolean(control.disabled) },
             )],
-        },
-        {
-            kind: 'actions',
-            rows: [selectRow(
-                session,
-                'weaponSize',
-                routeParts,
-                'Choose weapon size...',
-                sizeOptions,
-                hasSize ? [pending.size] : [],
-            )],
-        },
-        {
-            kind: 'actions',
-            rows: [selectRow(
-                session,
-                'mount',
-                routeParts,
-                mountAvailable ? 'Choose mount type...' : 'Select quantity and size first...',
-                mountOptions,
-                hasMount ? [pending.mount] : [],
-                { disabled: !mountAvailable },
-            )],
-        },
-        {
-            kind: 'actions',
-            rows: [selectRow(
-                session,
-                'weapon',
-                routeParts,
-                weaponAvailable ? 'Choose weapon...' : 'Select a mount type first...',
-                weaponOptions,
-                [],
-                { disabled: !weaponAvailable },
-            )],
-        },
+        })),
         ...(flow.weapons.length > 0 ? [{
             kind: 'actions',
             rows: [new Discord.ActionRowBuilder().addComponents(
@@ -342,7 +336,7 @@ function buildDocument(flow, session, { controlsStable = !flow.calculating } = {
                 .setStyle(Discord.ButtonStyle.Primary),
         )]
         : [];
-    return createAdminPanelDocument({
+    return createUXPanelDocument({
         title: 'MTToT Simulator',
         description: 'Configure an Anti-Xeno loadout to simulate its minimum time on target against a Thargoid Interceptor.',
         accentColor: brandColorFor(flow),
@@ -377,39 +371,41 @@ function getFlow(state) {
 function getEditableFlow(state) {
     const flow = getFlow(state);
     if (flow.calculating) {
-        throw new Error('This MTToT calculation is already being published.');
+        throw expectedInteractionError('This MTToT calculation is already being published.');
     }
     if (flow.publicationAttempt) {
-        throw new Error('This calculation has already been submitted for publication. Confirm it before making changes.');
+        throw expectedInteractionError('This calculation has already been submitted for publication. Confirm it before making changes.');
     }
     return flow;
 }
 
 function getPendingWeapon(flow, parts) {
-    if (!flow.pendingWeapon) throw new Error('There is no weapon addition awaiting selection.');
+    if (!flow.pendingWeapon) throw expectedInteractionError('There is no weapon addition awaiting selection.');
     const routeToken = String(parts?.[1] ?? '');
     if (!routeToken || routeToken !== flow.pendingWeapon.token) {
-        throw new Error('This weapon addition is no longer active.');
+        throw expectedInteractionError('This weapon addition is no longer active.');
     }
     return flow.pendingWeapon;
 }
 
 function selectedValue(interaction) {
     const value = interaction.values?.[0];
-    if (!value) throw new Error('Please choose a valid option.');
+    if (!value) throw expectedInteractionError('Please choose a valid option.');
     return String(value);
 }
 
 async function updatePanel(interaction, state) {
     const flow = getFlow(state);
-    if (flow.calculating) throw new Error('This MTToT calculation is already being published.');
+    if (flow.calculating) throw expectedInteractionError('This MTToT calculation is already being published.');
     state.panelSession.invalidateForms();
     return interaction.update(renderPanel(flow, state.panelSession, interaction.message));
 }
 
 async function selectInterceptor(interaction, _parts, state) {
     const value = selectedValue(interaction);
-    if (!INTERCEPTOR_OPTIONS.some((option) => option.value === value)) throw new Error('Please choose a valid Interceptor.');
+    if (!INTERCEPTOR_OPTIONS.some((option) => option.value === value)) {
+        throw expectedInteractionError('Please choose a valid Interceptor.');
+    }
     getEditableFlow(state).interceptor = value;
     return updatePanel(interaction, state);
 }
@@ -419,7 +415,7 @@ async function selectMount(interaction, parts, state) {
     const pending = getPendingWeapon(flow, parts);
     const value = selectedValue(interaction);
     if (!eligibleMountOptions(flow, pending.size, pending.quantity).some((option) => option.value === value)) {
-        throw new Error('Please choose a valid mount type.');
+        throw expectedInteractionError('Please choose a valid mount type.');
     }
     pending.mount = value;
     return updatePanel(interaction, state);
@@ -430,7 +426,7 @@ async function selectWeaponQuantity(interaction, parts, state) {
     const pending = getPendingWeapon(flow, parts);
     const value = selectedValue(interaction);
     if (!QUANTITY_OPTIONS.some((option) => option.value === value)) {
-        throw new Error(`Weapon quantity must be between 1 and ${MAX_PANEL_WEAPON_QUANTITY}.`);
+        throw expectedInteractionError(`Weapon quantity must be between 1 and ${MAX_PANEL_WEAPON_QUANTITY}.`);
     }
     pending.quantity = Number(value);
     pending.mount = null;
@@ -446,7 +442,7 @@ async function selectWeaponSize(interaction, parts, state) {
     const pending = getPendingWeapon(flow, parts);
     const value = selectedValue(interaction);
     if (!eligibleSizeOptions(flow, pending.quantity ?? 1).some((option) => option.value === value)) {
-        throw new Error('Please choose a valid weapon size.');
+        throw expectedInteractionError('Please choose a valid weapon size.');
     }
     pending.size = value;
     pending.mount = null;
@@ -456,17 +452,17 @@ async function selectWeaponSize(interaction, parts, state) {
 async function selectWeapon(interaction, parts, state) {
     const flow = getEditableFlow(state);
     const pending = getPendingWeapon(flow, parts);
-    if (!pending.mount) throw new Error('Choose a mount type before choosing a weapon.');
+    if (!pending.mount) throw expectedInteractionError('Choose a mount type before choosing a weapon.');
     const value = selectedValue(interaction);
     if (!eligibleWeaponOptions(flow, pending.size, pending.mount, pending.quantity)
         .some((option) => option.value === value)) {
-        throw new Error('Please choose a weapon matching the selected size and mount.');
+        throw expectedInteractionError('Please choose a weapon matching the selected size and mount.');
     }
     const existing = flow.weapons.find((weapon) => weapon.code === value);
     if (existing) {
         const combinedQuantity = existing.quantity + pending.quantity;
         if (combinedQuantity > MAX_WEAPON_QUANTITY) {
-            throw new Error(
+            throw expectedInteractionError(
                 `The combined weapon quantity cannot exceed ${MAX_WEAPON_QUANTITY.toLocaleString('en-US')}.`,
             );
         }
@@ -474,7 +470,7 @@ async function selectWeapon(interaction, parts, state) {
     }
     else {
         if (isAtUniqueWeaponCap(flow)) {
-            throw new Error(`A loadout can contain at most ${MAX_UNIQUE_WEAPON_TYPES} unique weapon types.`);
+            throw expectedInteractionError(`A loadout can contain at most ${MAX_UNIQUE_WEAPON_TYPES} unique weapon types.`);
         }
         flow.weapons.push({ code: value, quantity: pending.quantity });
     }
@@ -494,7 +490,7 @@ async function cancelWeaponAddition(interaction, parts, state) {
     const flow = getEditableFlow(state);
     getPendingWeapon(flow, parts);
     if (flow.weapons.length === 0) {
-        throw new Error('The initial weapon selection cannot be cancelled. Select a weapon to continue.');
+        throw expectedInteractionError('The initial weapon selection cannot be cancelled. Select a weapon to continue.');
     }
     flow.pendingWeapon = null;
     return updatePanel(interaction, state);
@@ -525,10 +521,10 @@ function showEnvironmentModal(interaction, _parts, state) {
 
 function startWeaponAddition(interaction, _parts, state) {
     const flow = getEditableFlow(state);
-    if (flow.pendingWeapon) throw new Error('Finish the current weapon addition before adding more weapons.');
+    if (flow.pendingWeapon) throw expectedInteractionError('Finish the current weapon addition before adding more weapons.');
     const sizeOptions = eligibleSizeOptions(flow, 1);
     if (sizeOptions.length < 1) {
-        throw new Error('No compatible weapon types remain available for this loadout.');
+        throw expectedInteractionError('No compatible weapon types remain available for this loadout.');
     }
     flow.pendingWeapon = createPendingWeapon();
     return updatePanel(interaction, state);
@@ -543,9 +539,9 @@ function summaryWeaponOptions(flow) {
 
 function showEditWeaponsModal(interaction, _parts, state) {
     const flow = getEditableFlow(state);
-    if (flow.pendingWeapon) throw new Error('Finish the current weapon addition before editing the loadout.');
+    if (flow.pendingWeapon) throw expectedInteractionError('Finish the current weapon addition before editing the loadout.');
     const options = summaryWeaponOptions(flow);
-    if (options.length < 1) throw new Error('Add weapons before editing the loadout.');
+    if (options.length < 1) throw expectedInteractionError('Add weapons before editing the loadout.');
     const customId = state.panelSession.buildForm('saveEditedWeapons', [], {}, interaction.customId);
     return interaction.showModal(buildModal(
         customId,
@@ -566,9 +562,9 @@ function showEditWeaponsModal(interaction, _parts, state) {
 }
 
 function parseInteger(value, label) {
-    if (!/^-?\d+$/.test(value)) throw new Error(`${label} must be a whole number.`);
+    if (!/^-?\d+$/.test(value)) throw expectedInteractionError(`${label} must be a whole number.`);
     const parsed = Number(value);
-    if (!Number.isSafeInteger(parsed)) throw new Error(`${label} is outside the supported range.`);
+    if (!Number.isSafeInteger(parsed)) throw expectedInteractionError(`${label} is outside the supported range.`);
     return parsed;
 }
 
@@ -576,8 +572,8 @@ async function saveEnvironment(interaction, _parts, state) {
     const flow = getEditableFlow(state);
     const accuracy = parseInteger(getModalTextInput(interaction, 'accuracy'), 'Accuracy');
     const range = parseInteger(getModalTextInput(interaction, 'range'), 'Range');
-    if (accuracy < 0) throw new Error('Accuracy must be between 0 and 100.');
-    if (range < 0) throw new Error('Range cannot be negative.');
+    if (accuracy < 0) throw expectedInteractionError('Accuracy must be between 0 and 100.');
+    if (range < 0) throw expectedInteractionError('Range cannot be negative.');
     flow.accuracy = Math.min(100, accuracy);
     flow.range = range;
     completePanelInteraction(interaction);
@@ -586,14 +582,17 @@ async function saveEnvironment(interaction, _parts, state) {
 
 async function saveEditedWeapons(interaction, _parts, state) {
     const flow = getEditableFlow(state);
-    if (flow.pendingWeapon) throw new Error('Finish the current weapon addition before editing the loadout.');
-    const code = getRequiredModalSingleSelect(interaction, 'weapon', summaryWeaponOptions(flow), 'weapon type');
+    if (flow.pendingWeapon) throw expectedInteractionError('Finish the current weapon addition before editing the loadout.');
+    const code = getModalSingleSelectValue(interaction, 'weapon');
+    if (!code || !summaryWeaponOptions(flow).some((option) => option.value === code)) {
+        throw expectedInteractionError('Please select a valid weapon type.');
+    }
     const quantity = parseInteger(getModalTextInput(interaction, 'quantity'), 'Weapon quantity');
     if (quantity < 0 || quantity > MAX_WEAPON_QUANTITY) {
-        throw new Error(`Weapon quantity must be between 0 and ${MAX_WEAPON_QUANTITY.toLocaleString('en-US')}.`);
+        throw expectedInteractionError(`Weapon quantity must be between 0 and ${MAX_WEAPON_QUANTITY.toLocaleString('en-US')}.`);
     }
     const index = flow.weapons.findIndex((weapon) => weapon.code === code);
-    if (index < 0) throw new Error('That weapon type is no longer selected.');
+    if (index < 0) throw expectedInteractionError('That weapon type is no longer selected.');
     if (quantity === 0) flow.weapons.splice(index, 1);
     else flow.weapons[index].quantity = quantity;
     if (flow.weapons.length === 0) flow.pendingWeapon = createPendingWeapon();
@@ -647,121 +646,47 @@ function isDefinitePublicSendFailure(error) {
     return Number.isInteger(status) && status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
-function cooldownError(cooldownUntilMs) {
-    return new Error(`Calculate is available again <t:${Math.ceil(cooldownUntilMs / 1000)}:R>.`);
-}
-
-async function restorePanel(interaction, flow, panelSession, sourceMessage) {
-    return interaction.editReply(renderPanel(flow, panelSession, sourceMessage, { controlsStable: true }));
-}
-
-async function restoreSourcePanelViaWebhook(interaction, flow, panelSession, sourceMessage) {
-    const messageId = String(interaction.message?.id ?? '').trim();
-    if (!messageId || typeof interaction.webhook?.editMessage !== 'function') {
-        throw new Error('The acknowledged MTToT panel cannot be restored because its interaction webhook is unavailable.');
-    }
-    return interaction.webhook.editMessage(
-        messageId,
-        renderPanel(flow, panelSession, sourceMessage, { controlsStable: true }),
-    );
-}
-
-async function restorePanelWithRetry(interaction, flow, panelSession, sourceMessage, { viaWebhook = false } = {}) {
-    const restore = viaWebhook ? restoreSourcePanelViaWebhook : restorePanel;
-    let firstError;
-    try {
-        await restore(interaction, flow, panelSession, sourceMessage);
-        return true;
-    } catch (error) {
-        firstError = error;
-        report.warn('Private panel restoration failed; retrying once', error);
-    }
-    try {
-        await restore(interaction, flow, panelSession, sourceMessage);
-        return true;
-    } catch (error) {
-        report.error('Private panel restoration failed after retry', error, {
-            firstError: firstError?.message,
-        });
-        return false;
-    }
-}
-
-async function restorePanelAndUnlock(interaction, flow, panelSession, sourceMessage, options) {
-    const restored = await restorePanelWithRetry(interaction, flow, panelSession, sourceMessage, options);
-    flow.calculating = false;
-    return restored;
-}
+const publisher = createReusablePanelPublisher({
+    cooldownMs: CALCULATE_COOLDOWN_MS,
+    createAttempt: ({ interaction, model }) => createPublicationAttempt(model, interaction),
+    errors: {
+        alreadyPublishing: 'This MTToT calculation is already being published.',
+        cooldown: (until) => `Calculate is available again <t:${Math.ceil(until / 1000)}:R>.`,
+        notReady: 'Complete the environment and selected weapons first.',
+        webhookUnavailable: 'The acknowledged MTToT panel cannot be restored because its interaction webhook is unavailable.',
+    },
+    getAttempt: (flow) => flow.publicationAttempt,
+    getCooldownUntil: (flow) => flow.cooldownUntilMs,
+    isBusy: (flow) => flow.calculating,
+    isDefiniteFailure: isDefinitePublicSendFailure,
+    isReady: readyToCalculate,
+    markPublished: (flow) => { flow.calculated = true; },
+    publishAttempt: ({ attempt, interaction }) => interaction.channel.send(attempt.messageOptions),
+    renderEditable: ({ model, panelSession, sourceMessage }) => renderPanel(
+        model,
+        panelSession,
+        sourceMessage,
+        { controlsStable: true },
+    ),
+    renderLocked: ({ interaction, model, panelSession }) => renderLockedPanel(
+        model,
+        panelSession,
+        interaction.message,
+    ),
+    reporter: report,
+    resetAttempt: resetPublicationAttempt,
+    setAttempt: (flow, attempt) => { flow.publicationAttempt = attempt; },
+    setBusy: (flow, busy) => { flow.calculating = busy; },
+    setCooldownUntil: (flow, until) => { flow.cooldownUntilMs = until; },
+});
 
 async function calculate(interaction, _parts, state) {
-    const flow = getFlow(state);
-    if (!readyToCalculate(flow)) throw new Error('Complete the environment and selected weapons first.');
-    if (flow.calculating) throw new Error('This MTToT calculation is already being published.');
-    if (!flow.publicationAttempt && Number(flow.cooldownUntilMs) > Date.now()) {
-        throw cooldownError(flow.cooldownUntilMs);
-    }
-    flow.calculating = true;
-    state.panelSession.invalidateForms();
-    let lockAcknowledgementMayHaveApplied = false;
-    try {
-        const lockedPayload = renderLockedPanel(flow, state.panelSession, interaction.message);
-        // Discord can apply an interaction response before the request rejects
-        // locally. From this point forward, recovery must assume the panel is
-        // locked even if update() throws.
-        lockAcknowledgementMayHaveApplied = true;
-        await interaction.update(lockedPayload);
-    } catch (error) {
-        if (!lockAcknowledgementMayHaveApplied) {
-            flow.calculating = false;
-            throw error;
-        }
-        const restored = await restorePanelAndUnlock(
-            interaction,
-            flow,
-            state.panelSession,
-            interaction.message,
-            { viaWebhook: true },
-        );
-        if (restored) {
-            report.warn('Panel lock acknowledgement failed; editable panel restored', error);
-        } else {
-            report.error('Panel lock acknowledgement failed; private panel recovery unavailable', error);
-        }
-        // Do not attempt a fresh interaction reply: Discord may already have
-        // accepted update(), and recovery deliberately treats that outcome as
-        // ambiguous.
-        return;
-    }
-
-    let sendStarted = false;
-    try {
-        flow.publicationAttempt ??= createPublicationAttempt(flow, interaction);
-        sendStarted = true;
-        await interaction.channel.send(flow.publicationAttempt.messageOptions);
-    } catch (error) {
-        const ambiguousPublicSendFailure = sendStarted
-            && flow.publicationAttempt
-            && !isDefinitePublicSendFailure(error);
-        if (!ambiguousPublicSendFailure) resetPublicationAttempt(flow);
-        const restored = await restorePanelAndUnlock(
-            interaction,
-            flow,
-            state.panelSession,
-            interaction.message,
-        );
-        if (!restored) {
-            report.error('Calculation failed and private panel recovery was unavailable', error);
-            return;
-        }
-        throw error;
-    }
-
-    // The public result is known to have been accepted. Its state must not be
-    // rolled back or retried merely because the private panel refresh fails.
-    flow.calculated = true;
-    resetPublicationAttempt(flow);
-    flow.cooldownUntilMs = Date.now() + CALCULATE_COOLDOWN_MS;
-    await restorePanelAndUnlock(interaction, flow, state.panelSession, interaction.message);
+    return publisher.publish({
+        interaction,
+        model: getFlow(state),
+        panelSession: state.panelSession,
+        sourceMessage: interaction.message,
+    });
 }
 
 async function privateError(interaction, message) {
@@ -807,11 +732,11 @@ const router = createInteractionRouter({
     }),
     onExpired: ({ interaction }) => privateError(interaction, 'This MTToT panel expired. Run `/mttot` again.'),
     onComponentError: async ({ interaction, error }) => {
-        report.error('Panel action failed', error);
+        reportUnexpectedInteractionError(report, 'Panel action failed', error);
         return privateError(interaction, error.message);
     },
     onModalError: async ({ interaction, error }) => {
-        report.error('Panel modal failed', error);
+        reportUnexpectedInteractionError(report, 'Panel modal failed', error);
         return respondAfterAcknowledgement(interaction, undefined, {
             content: error.message,
         }, { followUp: true, reporter: report });
