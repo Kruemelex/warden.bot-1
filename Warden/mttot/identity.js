@@ -2,13 +2,13 @@
 
 const { botIdent, getIdentityBrandColor, getIdentityEmbedAuthor } = require('../../functions');
 
-const MTTOT2_IDENTITY_BOTS = new Set(['Warden', 'GuardianAI']);
+const MTTOT_IDENTITY_BOTS = new Set(['Warden', 'GuardianAI']);
 
-function supportsMttot2Identity(botName) {
-    return MTTOT2_IDENTITY_BOTS.has(String(botName ?? ''));
+function supportsMttotIdentity(botName) {
+    return MTTOT_IDENTITY_BOTS.has(String(botName ?? ''));
 }
 
-function resolveMttot2BrandColor({
+function resolveMttotBrandColor({
     getBotIdentity = botIdent,
     getColor = getIdentityBrandColor,
 } = {}) {
@@ -19,26 +19,26 @@ function resolveMttot2BrandColor({
         // that explicit no-identity state.
         return getColor('Warden');
     }
-    if (!supportsMttot2Identity(activeBotName)) {
-        throw new Error(`MTToT2 is unavailable for the active ${activeBotName} identity.`);
+    if (!supportsMttotIdentity(activeBotName)) {
+        throw new Error(`MTToT is unavailable for the active ${activeBotName} identity.`);
     }
     return getColor(activeBotName);
 }
 
-function resolveMttot2EmbedAuthor({
+function resolveMttotEmbedAuthor({
     getBotIdentity = botIdent,
     getAuthor = getIdentityEmbedAuthor,
 } = {}) {
     const activeBotName = String(getBotIdentity?.()?.activeBot?.botName ?? '').trim();
     if (!activeBotName) return getAuthor('Warden');
-    if (!supportsMttot2Identity(activeBotName)) {
-        throw new Error(`MTToT2 is unavailable for the active ${activeBotName} identity.`);
+    if (!supportsMttotIdentity(activeBotName)) {
+        throw new Error(`MTToT is unavailable for the active ${activeBotName} identity.`);
     }
     return getAuthor(activeBotName);
 }
 
 module.exports = {
-    resolveMttot2BrandColor,
-    resolveMttot2EmbedAuthor,
-    supportsMttot2Identity,
+    resolveMttotBrandColor,
+    resolveMttotEmbedAuthor,
+    supportsMttotIdentity,
 };

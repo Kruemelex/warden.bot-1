@@ -31,7 +31,7 @@ const {
     weapons,
 } = require('./catalog');
 const { MAX_ITERATION, buildMttotEmbed, simulateMttot } = require('./calculator');
-const { resolveMttot2BrandColor } = require('./identity');
+const { resolveMttotBrandColor } = require('./identity');
 const {
     MAX_UNIQUE_WEAPON_TYPES,
     MAX_WEAPON_QUANTITY,
@@ -43,7 +43,7 @@ const MAX_PANEL_WEAPON_QUANTITY = 25;
 const CALCULATE_COOLDOWN_MS = 10_000;
 const report = createConsoleReporter('MTToT').forSubsystem('Interactive panel');
 const sessions = createPanelSessionRegistry({
-    prefix: 'm2',
+    prefix: 'mt',
     label: 'MTToT',
     ttlMs: SESSION_TTL_MS,
     maxEntries: 150,
@@ -65,7 +65,7 @@ function initialFlow(interaction) {
     return {
         accuracy: Math.min(100, suppliedAccuracy ?? 100),
         calculated: false,
-        brandColor: resolveMttot2BrandColor(),
+        brandColor: resolveMttotBrandColor(),
         cooldownUntilMs: null,
         interceptor: null,
         pendingWeapon: weapons.length === 0 ? createPendingWeapon() : null,
@@ -94,7 +94,7 @@ function weaponCodes(flow) {
 }
 
 function brandColorFor(flow) {
-    return flow.brandColor ?? resolveMttot2BrandColor();
+    return flow.brandColor ?? resolveMttotBrandColor();
 }
 
 function selectRow(session, action, parts, placeholder, options, selectedValues = [], { disabled = false } = {}) {
@@ -805,7 +805,7 @@ const router = createInteractionRouter({
         panelSession: parsed.state.panelSession,
         formGeneration: parsed.state.formGeneration,
     }),
-    onExpired: ({ interaction }) => privateError(interaction, 'This MTToT panel expired. Run `/mttot2` again.'),
+    onExpired: ({ interaction }) => privateError(interaction, 'This MTToT panel expired. Run `/mttot` again.'),
     onComponentError: async ({ interaction, error }) => {
         report.error('Panel action failed', error);
         return privateError(interaction, error.message);

@@ -3,7 +3,7 @@
 const Discord = require('discord.js');
 const weapons = require('../../commands/Warden/math/data/weapons.json');
 const interceptors = require('../../commands/Warden/math/data/interceptors.json');
-const { resolveMttot2EmbedAuthor } = require('./identity');
+const { resolveMttotEmbedAuthor } = require('./identity');
 
 const WEAPON_CODE_PATTERN = /([0-9]+)([a-z]+)/g;
 const MAX_ITERATION = 1_000_000;
@@ -191,7 +191,7 @@ function simulateMttot({ interceptorName, weaponCodes, range = 0, accuracy = 100
 }
 
 function buildMttotEmbed(simulation, member, user, color = '#FF7100') {
-    const identity = resolveMttot2EmbedAuthor();
+    const identity = resolveMttotEmbedAuthor();
     return new Discord.EmbedBuilder()
         .setColor(color)
         .setTitle('**MTTOT Simulator**')
