@@ -2,8 +2,8 @@ const Discord = require("discord.js");
 const {
     botIdent,
     botLog,
+    getCommunityEmbedAuthor,
     getIdentityBrandColor,
-    getIdentityEmbedAuthor,
 } = require('../../functions');
 const config = require('../../config.json');
 module.exports = {
@@ -23,7 +23,7 @@ module.exports = {
             let returnEmbed = new Discord.EmbedBuilder()
                 .setTitle(`${botIdent().activeBot.communityName} Private Group`)
                 .setColor(getIdentityBrandColor())
-                .setAuthor(getIdentityEmbedAuthor())
+                .setAuthor(getCommunityEmbedAuthor())
                 .setThumbnail(botIdent().activeBot.icon)
                 .setDescription(
                     `**How to join the Private Group**\n` +

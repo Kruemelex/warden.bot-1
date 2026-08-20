@@ -2,7 +2,7 @@ const { botLog } = require('../../../functions');
 const Discord = require("discord.js");
 const ships = require('./ships.json')
 const { findSpeedrunBest } = require('../../../Warden/db/leaderboards/repository')
-const { createLeaderboardSubmission } = require('./leaderboardSubmission')
+const { createLeaderboardSubmission, publishLeaderboardSubmissionConfirmation } = require('./leaderboardSubmission')
 const { assertLeaderboardSubmissionAllowed, isLeaderboardAvailabilityError } = require('../../../Warden/leaderboards/policy')
 const { createConsoleReporter } = require('../../../logging/consoleReporting')
 
@@ -119,11 +119,12 @@ module.exports = {
 				}
 			}
 
-			const stored = await createLeaderboardSubmission(interaction, 'speedrun', {
+			const created = await createLeaderboardSubmission(interaction, 'speedrun', {
 				user_id: user, name, time: timeStuff.seconds, milliseconds: timeStuff.milliseconds,
 				class: args.shipclass, ship: args.ship, variant: args.variant, link: args.link,
 				approval: 0, date: timestamp, comments: args.comments,
 			})
+			const stored = created.submission
 			submissionId = stored.id
 
 			// Print out data
@@ -139,10 +140,7 @@ module.exports = {
 					{name: "Class", value: `${args.shipclass}`, inline: true},
 					{name: "link", value: `${args.link}`, inline: true},
 					{name: "Comments", value: `${args.comments}`, inline: true})
-			await interaction.channel.send({ embeds: [returnEmbed.setTimestamp()] })
-			await interaction.editReply({
-				content: `✅ Submission #${submissionId} recorded. It is now up for review by Staff.`,
-			})
+			await publishLeaderboardSubmissionConfirmation(interaction, created, returnEmbed.setTimestamp())
 		}
 		catch (err) {
 			if (isLeaderboardAvailabilityError(err)) {

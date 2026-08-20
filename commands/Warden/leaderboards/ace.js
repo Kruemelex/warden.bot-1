@@ -7,7 +7,7 @@ const { testInputs } = require('../math/commons/testInput')
 const { getChart } = require('../math/commons/getChart')
 const { calculateAceScore, shipDataTable } = require('./aceScoreCalculator')
 const { findAceApproved } = require('../../../Warden/db/leaderboards/repository')
-const { createLeaderboardSubmission } = require('./leaderboardSubmission')
+const { createLeaderboardSubmission, publishLeaderboardSubmissionConfirmation } = require('./leaderboardSubmission')
 const { assertLeaderboardSubmissionAllowed, isLeaderboardAvailabilityError } = require('../../../Warden/leaderboards/policy')
 const { createConsoleReporter } = require('../../../logging/consoleReporting')
 
@@ -253,13 +253,14 @@ module.exports = {
                         }
                     }
 
-                    const stored = await createLeaderboardSubmission(interaction, 'ace', {
+                    const created = await createLeaderboardSubmission(interaction, 'ace', {
                         user_id: userID, name, timetaken: args.time_in_seconds,
                         mgauss: args.gauss_medium_number, sgauss: args.gauss_small_number,
                         mgaussfired: args.shots_medium_fired, sgaussfired: args.shots_small_fired,
                         percenthulllost: args.percenthulllost, score: result.score.toFixed(2),
                         link: args.submit_url, approval: 0, date: timestamp, shiptype: args.shiptype,
                     })
+                    const stored = created.submission
                     submissionId = stored.id
 
                     const submissionEmbed = new Discord.EmbedBuilder()
@@ -273,12 +274,11 @@ module.exports = {
                             {name: "link", value: `${args.submit_url}`, inline: true}
                         )
 
-                    await interaction.channel.send({ embeds: [submissionEmbed.setTimestamp()] })
-                    await interaction.editReply({
-                        content: `✅ Submission #${submissionId} recorded. It is now up for review by Staff.`,
-                    }).catch((responseError) => {
-                        report.error('Ace submission acknowledgement failed', responseError, { submissionId })
-                    })
+                    await publishLeaderboardSubmissionConfirmation(
+                        interaction,
+                        created,
+                        submissionEmbed.setTimestamp(),
+                    )
                 }
                 catch (err) {
 					if (isLeaderboardAvailabilityError(err)) {

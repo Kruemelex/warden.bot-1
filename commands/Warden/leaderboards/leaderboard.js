@@ -1,5 +1,9 @@
 const Discord = require("discord.js")
-const { botLog } = require('../../../functions');
+const {
+	botLog,
+	getCommunityEmbedAuthor,
+	getIdentityBrandColor,
+} = require('../../../functions');
 const { listAceBoard, listSpeedrunBoard } = require('../../../Warden/db/leaderboards/repository')
 const { createConsoleReporter } = require('../../../logging/consoleReporting')
 const { buildSpeedrunEmbed } = require('./leaderboardPresentation')
@@ -100,17 +104,19 @@ data: new Discord.SlashCommandBuilder()
 		await interaction.deferReply(byMe ? { flags: Discord.MessageFlags.Ephemeral } : {});
 		if (subcommand === 'website') {
 			const embed = new Discord.EmbedBuilder()
-				.setColor('#FF7100')
+				.setColor(getIdentityBrandColor())
 				.setTitle(`**Leaderboards**`)
+				.setAuthor(getCommunityEmbedAuthor())
 				.setDescription(`Check out our famous group of Commanders that have taken the Thargoid culing to the next level!`)
-				.addFields(
-					{
-						name: `Website Link:`, 
-						value: `🏆 https://antixenoinitiative.com/?page_id=338`, inine: false 
-					},
-				)
 				.setTimestamp()
-			await interaction.editReply({ embeds: [embed] })
+			const actionRow = new Discord.ActionRowBuilder()
+				.addComponents(
+					new Discord.ButtonBuilder()
+						.setLabel('View Leaderboards')
+						.setStyle(Discord.ButtonStyle.Link)
+						.setURL('https://antixenoinitiative.com/?page_id=338'),
+				)
+			await interaction.editReply({ embeds: [embed], components: [actionRow] })
 		}
 		if (subcommand === 'speedrun') {
 			const variant = interaction.options.getString('variant', true)

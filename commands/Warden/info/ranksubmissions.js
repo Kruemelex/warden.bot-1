@@ -20,6 +20,8 @@ module.exports = {
 
 The proof has to be a **screenshot**, or a **video** (in some cases we may require a video), and has to clearly show the interceptor death explosion, the "bond received" message and other parts of ship UI such as the Ship Health and Radar.
 
+To be eligible for ranks in our server, please follow the **Nickname Format** layed out under [rule 3](https://discord.com/channels/380246809076826112/410089988852547614/1174095112331071558).
+
 For more information, please visit the AXI ranks page on our website: https://antixenoinitiative.com/ranks`)
         
 

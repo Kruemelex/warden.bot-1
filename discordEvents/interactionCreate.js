@@ -7,6 +7,7 @@ const config = require('../config.json')
 const Discord = require('discord.js')
 const { sendInitialInteractionResponse } = require('../ux/interactions/acknowledgement')
 const mttotCommand = require('../commands/Warden/math/mttot')
+const helpCommand = require('../commands/common/help')
 // const { default: test }
 
 const DISCORD_INITIAL_RESPONSE_WINDOW_MS = 3_000
@@ -19,7 +20,10 @@ const handleLeaderboardSettingsInteraction = isWarden
     ? require('../Warden/leaderboards').handleInteraction
     : undefined
 const handleRanksInteraction = isWarden
-    ? require('../commands/Warden/info/ranks').handleInteraction
+    ? require('../commands/Warden/info/rankstats').handleInteraction
+    : undefined
+const handleHelpInteraction = helpCommand.supportsHelpIdentity(botIdent().activeBot.botName)
+    ? helpCommand.handleInteraction
     : undefined
 const handleMttotInteraction = mttotCommand.supportsMttotIdentity(botIdent().activeBot.botName)
     ? mttotCommand.handleInteraction
@@ -157,6 +161,7 @@ const exp = {
         if (handleLeaderboardSettingsInteraction && await handleLeaderboardSettingsInteraction(interaction)) return
         if (await handleLoggingSettingsInteraction(interaction)) return
         if (handleRanksInteraction && await handleRanksInteraction(interaction)) return
+        if (handleHelpInteraction && await handleHelpInteraction(interaction)) return
         if (handleMttotInteraction && await handleMttotInteraction(interaction)) return
 
         if (interaction.isModalSubmit()) {

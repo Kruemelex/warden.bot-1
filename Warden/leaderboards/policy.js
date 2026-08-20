@@ -16,10 +16,25 @@ function submissionHaltedError(type) {
     return error;
 }
 
+function submissionChannelUnconfiguredError(type) {
+    const label = type === 'speedrun' ? 'Speedrun' : 'Ace';
+    const error = new Error(`${label} submissions are unavailable until Staff configure their submission channel.`);
+    error.code = 'LEADERBOARD_SUBMISSION_CHANNEL_UNCONFIGURED';
+    error.submissionType = type;
+    return error;
+}
+
+function getSubmissionChannelId(current, type) {
+    return type === 'speedrun'
+        ? current.speedrunSubmissionChannelId
+        : current.aceSubmissionChannelId;
+}
+
 function isLeaderboardAvailabilityError(error) {
     return [
         'LEADERBOARD_MAINTENANCE_MODE',
         'LEADERBOARD_SUBMISSIONS_HALTED',
+        'LEADERBOARD_SUBMISSION_CHANNEL_UNCONFIGURED',
     ].includes(error?.code);
 }
 
@@ -34,6 +49,7 @@ async function assertLeaderboardSubmissionAllowed(guildId, type) {
     const current = await assertLeaderboardMutationAllowed(guildId);
     const mode = type === 'speedrun' ? current.speedrunSubmissionMode : current.aceSubmissionMode;
     if (mode === 'halted') throw submissionHaltedError(type);
+    if (!getSubmissionChannelId(current, type)) throw submissionChannelUnconfiguredError(type);
     return current;
 }
 
@@ -42,5 +58,7 @@ module.exports = {
     assertLeaderboardSubmissionAllowed,
     isLeaderboardAvailabilityError,
     maintenanceError,
+    getSubmissionChannelId,
+    submissionChannelUnconfiguredError,
     submissionHaltedError,
 };
