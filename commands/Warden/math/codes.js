@@ -1,4 +1,5 @@
 const Discord = require("discord.js");
+const { getIdentityEmbedAuthor } = require('../../../functions');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -10,6 +11,7 @@ module.exports = {
         const returnEmbed = new Discord.EmbedBuilder()
 		.setColor('#FF7100')
 		.setTitle("**Weapon Codes**")
+		.setAuthor(getIdentityEmbedAuthor())
 		.setDescription(`Weapon Codes are a method for quickly explaining the total type/number of weapon modules on a ship. The most common weapon code used in the AXI 
         is the "2m2s" code, which means, 2 Medium Gauss and 2 Small Gauss.
         

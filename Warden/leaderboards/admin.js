@@ -14,10 +14,16 @@ const {
 } = require('../../ux/interactions/acknowledgement');
 const {
     buildModal,
+    buildModalChannelSelectField,
     buildModalStringSelectField,
+    getModalSelectedChannel,
     getRequiredModalSingleSelect,
 } = require('../../ux/components/modalFields');
 const settings = require('./settings');
+const {
+    assertUsableSubmissionChannel,
+    SUBMISSION_CHANNEL_TYPES,
+} = require('./submissionChannels');
 const { requestWebsiteSync } = require('./websitePublisher');
 const { reconcilePendingLeaderboardApprovals } = require('../../commands/Warden/leaderboards/staffApproval/reconciliation');
 
@@ -83,13 +89,6 @@ function renderPanel(current, ownerUserId, { markSuccess = false } = {}) {
             {
                 kind: 'section',
                 content: [
-                    `### Submissions\nSpeedrun: **${current.speedrunSubmissionMode === 'halted' ? 'Halted' : 'Open'}**\nAce: **${current.aceSubmissionMode === 'halted' ? 'Halted' : 'Open'}**\n-# Controls all newly submitted \`/speedrun\` and \`/ace\` entries.`,
-                ],
-                accessory: editButton(session, 'editSubmissions'),
-            },
-            {
-                kind: 'section',
-                content: [
                     `### Website Publishing\n${current.websitePublishingEnabled ? 'Enabled' : 'Disabled'}\n-# Push approved public Leaderboard snapshots to the website plugin.`,
                 ],
                 accessory: editButton(session, 'editWebsite'),
@@ -108,6 +107,25 @@ function renderPanel(current, ownerUserId, { markSuccess = false } = {}) {
                             .setStyle(Discord.ButtonStyle.Secondary),
                     ),
                 ],
+            },
+            { kind: 'separator', divider: true, spacing: 'Large' },
+            {
+                kind: 'text',
+                content: '## Submissions\nConfigure availability and the public destination for each Leaderboard submission type.',
+            },
+            {
+                kind: 'section',
+                content: [
+                    `### Speedrun\nSubmissions: **${current.speedrunSubmissionMode === 'halted' ? 'Halted' : 'Open'}**\nChannel: ${current.speedrunSubmissionChannelId ? `<#${current.speedrunSubmissionChannelId}>` : '**Not configured**'}\n-# Completed \`/speedrun\` submissions are published in this channel.`,
+                ],
+                accessory: editButton(session, 'editSpeedrunSubmissions'),
+            },
+            {
+                kind: 'section',
+                content: [
+                    `### Ace\nSubmissions: **${current.aceSubmissionMode === 'halted' ? 'Halted' : 'Open'}**\nChannel: ${current.aceSubmissionChannelId ? `<#${current.aceSubmissionChannelId}>` : '**Not configured**'}\n-# Completed \`/ace\` submissions are published in this channel; calculations remain available.`,
+                ],
+                accessory: editButton(session, 'editAceSubmissions'),
             },
         ],
     });
@@ -140,29 +158,48 @@ function showWebsiteModal(interaction, _parts, state) {
     })));
 }
 
-function showSubmissionsModal(interaction, _parts, state) {
+function showSubmissionModal(interaction, state, type) {
     const current = state.settings;
-    const customId = state.panelSession.buildForm('saveSubmissions', [], { revision: current.settingsRevision }, interaction.customId);
+    const isSpeedrun = type === 'speedrun';
+    const label = isSpeedrun ? 'Speedrun' : 'Ace';
+    const modeKey = `${type}SubmissionMode`;
+    const channelKey = `${type}SubmissionChannelId`;
+    const customId = state.panelSession.buildForm(
+        isSpeedrun ? 'saveSpeedrunSubmissions' : 'saveAceSubmissions',
+        [],
+        { revision: current.settingsRevision },
+        interaction.customId,
+    );
     return interaction.showModal(buildModal(
         customId,
-        'Submissions',
+        `${label} Submissions`,
         buildModalStringSelectField({
-            label: 'Speedrun Submissions',
-            description: 'Controls all new /speedrun submissions.',
-            customId: 'speedrunSubmissionMode',
-            placeholder: 'Choose Speedrun availability...',
+            label: `${label} Submissions`,
+            description: isSpeedrun
+                ? 'Controls all new /speedrun submissions.'
+                : 'Controls new /ace submissions; score calculation remains available.',
+            customId: modeKey,
+            placeholder: `Choose ${label} availability...`,
             options: SUBMISSION_OPTIONS,
-            selectedValues: [current.speedrunSubmissionMode],
+            selectedValues: [current[modeKey]],
         }),
-        buildModalStringSelectField({
-            label: 'Ace Submissions',
-            description: 'Controls new /ace submissions; score calculation remains available.',
-            customId: 'aceSubmissionMode',
-            placeholder: 'Choose Ace availability...',
-            options: SUBMISSION_OPTIONS,
-            selectedValues: [current.aceSubmissionMode],
+        buildModalChannelSelectField({
+            label: 'Submission Channel',
+            description: `Posts completed ${label} submission embeds in this channel.`,
+            customId: channelKey,
+            placeholder: `Choose the ${label} submission channel...`,
+            selectedChannelId: current[channelKey],
+            channelTypes: SUBMISSION_CHANNEL_TYPES,
         }),
     ));
+}
+
+function showSpeedrunSubmissionsModal(interaction, _parts, state) {
+    return showSubmissionModal(interaction, state, 'speedrun');
+}
+
+function showAceSubmissionsModal(interaction, _parts, state) {
+    return showSubmissionModal(interaction, state, 'ace');
 }
 
 async function replacePanel(interaction, current, state) {
@@ -187,20 +224,34 @@ async function saveWebsite(interaction, _parts, state) {
     return replacePanel(interaction, current, state);
 }
 
-async function saveSubmissions(interaction, _parts, state) {
-    const speedrunSubmissionMode = getRequiredModalSingleSelect(
-        interaction, 'speedrunSubmissionMode', SUBMISSION_OPTIONS, 'Speedrun submission setting',
+async function saveSubmissionSettings(interaction, state, type) {
+    const label = type === 'speedrun' ? 'Speedrun' : 'Ace';
+    const modeKey = `${type}SubmissionMode`;
+    const channelKey = `${type}SubmissionChannelId`;
+    const submissionMode = getRequiredModalSingleSelect(
+        interaction, modeKey, SUBMISSION_OPTIONS, `${label} submission setting`,
     );
-    const aceSubmissionMode = getRequiredModalSingleSelect(
-        interaction, 'aceSubmissionMode', SUBMISSION_OPTIONS, 'Ace submission setting',
-    );
+    const channel = getModalSelectedChannel(interaction, channelKey);
+    assertUsableSubmissionChannel(channel, {
+        guildId: interaction.guildId,
+        botMember: interaction.guild?.members?.me,
+        label,
+    });
     const current = await settings.update(
         interaction.guildId,
-        { speedrunSubmissionMode, aceSubmissionMode },
+        { [modeKey]: submissionMode, [channelKey]: channel.id },
         state.baseline.revision,
         interaction.user.id,
     );
     return replacePanel(interaction, current, state);
+}
+
+function saveSpeedrunSubmissions(interaction, _parts, state) {
+    return saveSubmissionSettings(interaction, state, 'speedrun');
+}
+
+function saveAceSubmissions(interaction, _parts, state) {
+    return saveSubmissionSettings(interaction, state, 'ace');
 }
 
 async function syncWebsite(interaction) {
@@ -237,12 +288,13 @@ const router = createInteractionRouter({
     parse: sessions.parse,
     componentActions: {
         editMode: showModeModal,
-        editSubmissions: showSubmissionsModal,
+        editSpeedrunSubmissions: showSpeedrunSubmissionsModal,
+        editAceSubmissions: showAceSubmissionsModal,
         editWebsite: showWebsiteModal,
         syncWebsite,
         reconcilePosts,
     },
-    modalActions: { saveMode, saveSubmissions, saveWebsite },
+    modalActions: { saveMode, saveSpeedrunSubmissions, saveAceSubmissions, saveWebsite },
     authorize: async ({ interaction, parsed }) => {
         if (String(interaction.user?.id) !== String(parsed.ownerUserId)) {
             await interaction.reply({ embeds: [errorEmbed('This panel belongs to another administrator.')], flags: Discord.MessageFlags.Ephemeral });

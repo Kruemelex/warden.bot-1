@@ -1,7 +1,7 @@
 const Discord = require("discord.js");
 const {
+    getAxiWikiEmbedAuthor,
     getIdentityBrandColor,
-    getIdentityEmbedAuthor,
 } = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -13,7 +13,7 @@ module.exports = {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Using Module Reinforcement Packages')
         .setColor(getIdentityBrandColor())
-        .setAuthor(getIdentityEmbedAuthor())
+        .setAuthor(getAxiWikiEmbedAuthor())
         .setThumbnail('https://static.wikia.nocookie.net/elite-dangerous/images/9/96/MRP.png/revision/latest?cb=20170114223512')
         .setDescription(`Multiple MRPs will combine their module protection %, but always take damage in a set order:
 
@@ -24,7 +24,20 @@ module.exports = {
         
         The GMRP can be engineered with Anti-Guardian Zone Resistance at the engineer Ram Tah in Meene
         
-        - Always ensure your largest MRP is in an optional slot (and not a military one) or your module protection will be compromised much sooner.`)
-        interaction.reply({embeds: [returnEmbed.setTimestamp()]})
+        - Always ensure your largest MRP is in an optional slot (and not a military one) or your module protection will be compromised much sooner.`);
+
+        const actionRow = new Discord.ActionRowBuilder()
+        .addComponents(
+            new Discord.ButtonBuilder()
+            .setLabel('Optional Modules')
+            .setStyle(Discord.ButtonStyle.Link)
+            .setURL('https://wiki.antixenoinitiative.com/en/optionals'),
+            new Discord.ButtonBuilder()
+            .setLabel('Ship Build Theory')
+            .setStyle(Discord.ButtonStyle.Link)
+            .setURL('https://wiki.antixenoinitiative.com/en/shipbuildtheory'),
+        );
+
+        interaction.reply({embeds: [returnEmbed.setTimestamp()], components: [actionRow]})
     }
 }

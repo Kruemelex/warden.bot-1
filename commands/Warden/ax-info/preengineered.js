@@ -9,7 +9,6 @@ module.exports = {
     execute (interaction) {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Pre-Engineered Modules')
-        .setURL('https://wiki.antixenoinitiative.com/en/weapons')
         .setColor(getIdentityBrandColor())
         .setAuthor(getIdentityEmbedAuthor())
         .setDescription(`It should be noted that **all pre-engineered modules require materials for each purchase**. Unlock costs for these can be found on Inara's crafting section.`)
@@ -19,7 +18,16 @@ module.exports = {
             {name: "Azimuth EAXMC", value: "Can only be found at Rescue Ships (`Rescue Ship Hutner` in `Luyten's Star` and `Rescue Ship Cornwallis` in `V886 Centauri`).", inline: false},
             {name: "Frame Shift Drive (SCO)", value: "Can be found at Human Tech Brokers (see image below).", inline: false},   
         )
-        .setImage('https://wiki.antixenoinitiative.com/img/techbrokers.png')
-        interaction.reply({embeds: [returnEmbed.setTimestamp()]})
+        .setImage('https://wiki.antixenoinitiative.com/img/techbrokers.png');
+
+        const actionRow = new Discord.ActionRowBuilder()
+        .addComponents(
+            new Discord.ButtonBuilder()
+            .setLabel('AX Weapons')
+            .setStyle(Discord.ButtonStyle.Link)
+            .setURL('https://wiki.antixenoinitiative.com/en/weapons'),
+        );
+
+        interaction.reply({embeds: [returnEmbed.setTimestamp()], components: [actionRow]})
     }
 }

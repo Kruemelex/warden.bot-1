@@ -85,8 +85,17 @@ function buildUXPanelContainer(document, editorBlocks, paginationRow) {
     const container = createContainer(document);
     const state = { count: 0 };
     addArea(container, state, () => {
-        container.addTextDisplayComponents(buildTextDisplay(`# ${document.title}`));
-        if (document.description) container.addTextDisplayComponents(buildTextDisplay(document.description));
+        const summary = [`# ${document.title}`, document.description].filter(Boolean);
+        if (document.thumbnailUrl) {
+            const thumbnail = new Discord.ThumbnailBuilder().setURL(document.thumbnailUrl);
+            container.addSectionComponents(buildSection({ content: summary.slice(0, 3), accessory: thumbnail }));
+            for (const remaining of summary.slice(3)) {
+                container.addTextDisplayComponents(buildTextDisplay(remaining));
+            }
+        }
+        else {
+            for (const content of summary) container.addTextDisplayComponents(buildTextDisplay(content));
+        }
         addFields(container, document.fields);
         if (document.footer) container.addTextDisplayComponents(buildTextDisplay(`-# ${document.footer}`));
     }, layout.separator);

@@ -356,6 +356,13 @@
         "appoved_fromServer_GuildIds": ["380246809076826112"],
         "appoved_fromServer_GuildIds1": ["1173384782512652348"]
     },
+    "embedIdentities": {
+        "axiWiki": {
+            "name": "Anti-Xeno Initiative Wiki",
+            "icon": "https://cdn.discordapp.com/emojis/1539287462298263572.webp?size=512",
+            "link": "https://wiki.antixenoinitiative.com"
+        }
+    },
     "botTypes": [
         {
             "env": "Warden.env",
@@ -364,6 +371,7 @@
             "identityBrandColor": "#ff7100",
             "icon": "https://cdn.discordapp.com/emojis/1539287462298263572.webp?size=512",
             "communityName": "Anti-Xeno Initiative",
+            "communityShortName": "AXI",
             "communityIcon": "https://cdn.discordapp.com/emojis/1539287462298263572.webp?size=512",
             "communityLink": "https://antixenoinitiative.com",
             "guildId": "380246809076826112",
@@ -386,6 +394,7 @@
             "identityBrandColor": "#00ECFF",
             "icon": "https://xenostrikeforce.com/wp-content/uploads/2023/11/XSF_Logo_Large_Final-1024x1024.png",
             "communityName": "Xeno Strike Force",
+            "communityShortName": "XSF",
             "communityIcon": "https://xenostrikeforce.com/wp-content/uploads/2023/11/XSF_Logo_Large_Final-1024x1024.png",
             "communityLink": "https://xenostrikeforce.com",
             "guildId": "1173384782512652348",

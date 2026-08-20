@@ -32,6 +32,13 @@ function normalizeSubmissionMode(value) {
     return mode;
 }
 
+function normalizeChannelId(value) {
+    if (value == null || String(value).trim() === '') return null;
+    const channelId = String(value).trim();
+    if (!/^\d{16,32}$/u.test(channelId)) throw new Error('Leaderboard submission channel must be a valid channel ID.');
+    return channelId;
+}
+
 function normalizeUpdatedBy(value) {
     const userId = value == null ? null : String(value).trim();
     if (userId !== null && !/^\d{16,32}$/u.test(userId)) throw new Error('Leaderboard settings updater must be a valid user ID.');
@@ -47,7 +54,9 @@ function encodePayload(settings) {
         guildId: normalizeGuildId(settings.guildId),
         mode: normalizeMode(settings.mode),
         speedrunSubmissionMode: normalizeSubmissionMode(settings.speedrunSubmissionMode),
+        speedrunSubmissionChannelId: normalizeChannelId(settings.speedrunSubmissionChannelId),
         aceSubmissionMode: normalizeSubmissionMode(settings.aceSubmissionMode),
+        aceSubmissionChannelId: normalizeChannelId(settings.aceSubmissionChannelId),
         websitePublishingEnabled: settings.websitePublishingEnabled !== false,
         updatedBy: normalizeUpdatedBy(settings.updatedBy),
     });
@@ -65,7 +74,9 @@ function mapRow(row) {
         guildId: normalizeGuildId(payload.guildId),
         mode: normalizeMode(payload.mode),
         speedrunSubmissionMode: normalizeSubmissionMode(payload.speedrunSubmissionMode),
+        speedrunSubmissionChannelId: normalizeChannelId(payload.speedrunSubmissionChannelId),
         aceSubmissionMode: normalizeSubmissionMode(payload.aceSubmissionMode),
+        aceSubmissionChannelId: normalizeChannelId(payload.aceSubmissionChannelId),
         websitePublishingEnabled: payload.websitePublishingEnabled !== false,
         updatedBy: normalizeUpdatedBy(payload.updatedBy),
         settingsRevision: Number(row.settings_revision),
@@ -108,7 +119,9 @@ async function seed(guildId) {
         guildId: normalizeGuildId(guildId),
         mode: 'open',
         speedrunSubmissionMode: 'open',
+        speedrunSubmissionChannelId: null,
         aceSubmissionMode: 'open',
+        aceSubmissionChannelId: null,
         websitePublishingEnabled: true,
         updatedBy: null,
     };
