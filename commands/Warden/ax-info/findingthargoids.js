@@ -19,7 +19,7 @@ module.exports = {
             .setColor(getIdentityBrandColor())
             .setAuthor(getAxiWikiEmbedAuthor())
             .setDescription(
-                'The most reliable Thargoid encounters are found through Non-Human Signal Sources in the Pleiades, Coalsack, and Witch Head Nebulae. AX Conflict Zones, hyperdictions, and permanent signal sources offer other ways to find them.',
+                'The most reliable Thargoid encounters are found through Non-Human Signal Sources in the Pleiades, Coalsack, and partially California Nebulae. AX Conflict Zones, hyperdictions, and permanent signal sources offer other ways to find them.',
             )
             .addFields(
                 {
