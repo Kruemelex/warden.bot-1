@@ -106,9 +106,15 @@ function buildGallery(items = []) {
 
 function addBlocks(container, blocks = [], { separator } = {}) {
     let count = 0;
+    let previousKind;
     for (const block of blocks) {
-        if (count > 0 && separator) container.addSeparatorComponents(buildSeparator(separator));
+        if (count > 0 && separator && block.kind !== 'separator' && previousKind !== 'separator') {
+            container.addSeparatorComponents(buildSeparator(separator));
+        }
         if (block.kind === 'text') container.addTextDisplayComponents(buildTextDisplay(block.content));
+        else if (block.kind === 'separator') {
+            container.addSeparatorComponents(buildSeparator({ divider: block.divider, spacing: block.spacing }));
+        }
         else if (block.kind === 'section') {
             if (block.accessory) container.addSectionComponents(buildSection(block));
             else container.addTextDisplayComponents(...block.content.map(buildTextDisplay));
@@ -118,6 +124,7 @@ function addBlocks(container, blocks = [], { separator } = {}) {
         else if (block.kind === 'group') addBlocks(container, block.blocks);
         else throw new Error(`Unsupported UX block kind: ${block.kind}`);
         count += 1;
+        previousKind = block.kind;
     }
     return count;
 }
