@@ -35,6 +35,16 @@ async function sendLeaderboardEmbeds(interaction, embeds, content) {
 	await interaction.editReply({ content, embeds: chunks.shift() ?? [] })
 	for (const chunk of chunks) await interaction.followUp({ embeds: chunk })
 }
+function uniqueUsers(rows) {
+	const seen = new Set()
+	return rows.filter((row) => {
+		const userId = String(row.user_id ?? '')
+		if (!userId) return true
+		if (seen.has(userId)) return false
+		seen.add(userId)
+		return true
+	})
+}
 function logLeaderboardError(interaction, err) {
 	try {
 		Promise.resolve(botLog(interaction.guild, new Discord.EmbedBuilder()
@@ -132,7 +142,7 @@ data: new Discord.SlashCommandBuilder()
 						rows: response,
 					}))
 				}
-				const topTen = response.slice(0, 10)
+				const topTen = uniqueUsers(response).slice(0, 10)
 				if (topTen.length > 0) {
 					const embeds = topTen.map((entry, index) => (
 						buildSpeedrunEmbed(entry, index + 1, variant, shipClass)
@@ -153,7 +163,7 @@ data: new Discord.SlashCommandBuilder()
 				"shipClass": interaction.options.getString('shipclass', true),
 			}
 			try {
-				const response = await listAceBoard(discordConvert.shipClass)
+				const response = uniqueUsers(await listAceBoard(discordConvert.shipClass, { limit: null })).slice(0, 10)
 				if (response.length > 0) {
 					let embeds = []
 					response.forEach((i,index) => {
