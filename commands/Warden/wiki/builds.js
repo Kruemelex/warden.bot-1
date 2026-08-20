@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { getCommunityEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
+const { getAxiWikiEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -11,8 +11,8 @@ module.exports = {
         const returnEmbed = new Discord.EmbedBuilder()
         .setColor(getIdentityBrandColor())
         .setTitle("**AX Ship Builds**")
-        .setAuthor(getCommunityEmbedAuthor())
-        .setDescription(`How to build a good Anti-Xeno Combat ship. Guides for both Interceptor and Scout hunting ships included.`)
+        .setAuthor(getAxiWikiEmbedAuthor())
+        .setDescription(`How to build a good Anti-Xeno Combat ship. Builds against Interceptors, Hunters, and for AXCZs included.`)
         .addFields(
             {name: "Recommended Builds", value: "https://wiki.antixenoinitiative.com/en/builds" },
             {name: "Ship Build Theory", value: "https://wiki.antixenoinitiative.com/en/shipbuildtheory"},

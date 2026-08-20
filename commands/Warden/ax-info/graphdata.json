@@ -63,13 +63,6 @@
         "type":"embed"
     },
     {
-        "argument": "small",
-        "title": "Small Ship Disclaimer",
-        "description": "Small Ship Disclaimer",
-        "link": "https://media.discordapp.net/attachments/426833664362414082/1066305186185879612/image.png",
-        "type": "text"
-    },
-    {
         "argument": "modguardian",
         "title": "Modified vs Stock Guardian Weapons",
         "description": "Stock guardian shard cannons and plasma chargers are **considerably worse** than their modified counterparts.\nOn the other hand, stock gauss cannons are **better** than their modified counterparts.",

@@ -1,5 +1,9 @@
 const Discord = require("discord.js");
-const { getCommunityEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
+const {
+    getCommunityEmbedAuthor,
+    getCommunityShortName,
+    getIdentityBrandColor,
+} = require('../../../functions');
 
 module.exports = {
     data: new Discord.SlashCommandBuilder()
@@ -14,7 +18,7 @@ module.exports = {
 	    .setTitle('**The Zoo**')
 	    .setAuthor(getCommunityEmbedAuthor())
 	    .setDescription(
-	        `The Zoo is a System in the Pleiades Nebula. Today it houses the symbolic in-game HQ of the AXI community. It was extensively developed during the advent of colonization, and now offers excellent outfitting for all commanders.`
+	        `The Zoo is a System in the Pleiades Nebula. Today it houses the symbolic in-game HQ of the ${getCommunityShortName()} community. It was extensively developed during the advent of colonization, and now offers excellent outfitting for all commanders.`
 	    )
 	    .addFields(
 	        {
@@ -30,9 +34,6 @@ module.exports = {
 	            inline: false,
 	        },
 	    );
-        const buttonRow = new Discord.ActionRowBuilder()
-        .addComponents(new Discord.ButtonBuilder().setLabel('Learn more about the Zoo').setStyle(Discord.ButtonStyle.Link).setURL('https://wiki.antixenoinitiative.com/en/nhss'),)
-
-        interaction.reply({ embeds: [returnEmbed.setTimestamp()], components: [buttonRow] });
+        interaction.reply({ embeds: [returnEmbed.setTimestamp()] });
     }
 }

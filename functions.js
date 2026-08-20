@@ -131,12 +131,33 @@ const thisBotFunctions = {
             iconURL: requireHttpsIdentityUrl(identity, 'icon'),
         }
     },
+    getIdentityEmbedFooter: function(botName) {
+        const author = thisBotFunctions.getIdentityEmbedAuthor(botName)
+        return {
+            text: author.name,
+            iconURL: author.iconURL,
+        }
+    },
     getCommunityEmbedAuthor: function(botName) {
         const identity = resolveConfiguredBotIdentity(botName)
         return {
             name: requireNonEmptyIdentityValue(identity, 'communityName'),
             iconURL: requireHttpsIdentityUrl(identity, 'communityIcon'),
             url: requireHttpsIdentityUrl(identity, 'communityLink'),
+        }
+    },
+    getCommunityShortName: function(botName) {
+        return requireNonEmptyIdentityValue(resolveConfiguredBotIdentity(botName), 'communityShortName')
+    },
+    getAxiWikiEmbedAuthor: function() {
+        const identity = {
+            ...config.embedIdentities?.axiWiki,
+            botName: 'AXI Wiki identity',
+        }
+        return {
+            name: requireNonEmptyIdentityValue(identity, 'name'),
+            iconURL: requireHttpsIdentityUrl(identity, 'icon'),
+            url: requireHttpsIdentityUrl(identity, 'link'),
         }
     },
     fileNameBotMatch: function(e) {
@@ -161,6 +182,7 @@ const thisBotFunctions = {
             logActiveBotStartupStatus('Loading Commands', '🕗')
             //Load Commands
 			let commands = [];
+			let globallyRegisteredCommands = [];
 			const commandFolders = fs.readdirSync('./commands');
 			for (const folder of commandFolders) {
 				const folderPath = path.join(__dirname,'commands',folder)
@@ -224,6 +246,11 @@ const thisBotFunctions = {
 							}
 						} else if (file.endsWith('.js') || file.endsWith('.cjs')) {
 							const command = require(filePath);
+							const supportedBotIdentities = command.supportedBotIdentities;
+							if (
+								Array.isArray(supportedBotIdentities)
+								&& !supportedBotIdentities.includes(thisBotFunctions.botIdent().activeBot.botName)
+							) continue;
 							const folderName = path.basename(folderPath);
 							command.category = folderName;
 							if (command.data === undefined) {
@@ -232,7 +259,9 @@ const thisBotFunctions = {
 								commandsColl.set(command.data.name, command); // For slash commands
 							}
 							if (command.data !== undefined) {
-								commands.push(command.data.toJSON());
+								const commandData = command.data.toJSON();
+								if (command.registrationScope === 'global') globallyRegisteredCommands.push(commandData);
+								else commands.push(commandData);
 							}
 						}
 					}
@@ -295,6 +324,7 @@ const thisBotFunctions = {
 				Routes.applicationGuildCommands(process.env.CLIENTID, process.env.GUILDID),
 				{ body: commands },
 			);
+			await upsertGlobalCommands(rest, Routes, globallyRegisteredCommands);
 	
 			logActiveBotStartupStatus('Commands Registered', '✅');
 
@@ -320,6 +350,26 @@ const thisBotFunctions = {
 				}
 				catch (error) {
 					commandRegistrationReporter.error('Stale global command cleanup failed', error);
+				}
+			}
+
+			async function upsertGlobalCommands(rest, Routes, commandData) {
+				if (commandData.length < 1) return;
+				const existingCommands = await rest.get(Routes.applicationCommands(process.env.CLIENTID));
+				for (const command of commandData) {
+					const existing = existingCommands.find((candidate) => candidate.name === command.name);
+					if (existing) {
+						await rest.patch(
+							Routes.applicationCommand(process.env.CLIENTID, existing.id),
+							{ body: command },
+						);
+					}
+					else {
+						await rest.post(
+							Routes.applicationCommands(process.env.CLIENTID),
+							{ body: command },
+						);
+					}
 				}
 			}
 		} catch (error) {

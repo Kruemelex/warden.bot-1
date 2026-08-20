@@ -1,5 +1,5 @@
 const Discord = require("discord.js");
-const { getIdentityBrandColor, getIdentityEmbedAuthor } = require('../../../functions');
+const { getAxiWikiEmbedAuthor, getIdentityBrandColor } = require('../../../functions');
 module.exports = {
     data: new Discord.SlashCommandBuilder()
     .setName(`guardianweapons`)
@@ -10,7 +10,7 @@ module.exports = {
         const returnEmbed = new Discord.EmbedBuilder()
         .setTitle('Guardian Weapons')
         .setColor(getIdentityBrandColor())
-        .setAuthor(getIdentityEmbedAuthor())
+        .setAuthor(getAxiWikiEmbedAuthor())
         .setDescription(`Information on Guardian Weapons`)
         .addFields(
             {name: 'Gauss'                                 , value: 'Hitscan weapon that deals high armor piercing damage and kill hearts quickly. Used in class 1 and class 2 sizes', inline: false},
@@ -22,7 +22,20 @@ module.exports = {
             {name: '__Purchase per Module with Materials__', value: 'Modified Plasma Charger, Modified ShardCannon, Modified Gauss Cannon', inline: false},
             {name: 'Available at'                          , value: 'Prospect\'s Deep in the Mbooni system', inline: false},
             {name: 'Blueprint Materials'                   , value: 'Modified Guardian weapons require **Guardian Weapon Blueprints** with **each** purchase', inline: false},     
-        )
-        interaction.reply({embeds: [returnEmbed.setTimestamp()]})
+        );
+
+        const actionRow = new Discord.ActionRowBuilder()
+        .addComponents(
+            new Discord.ButtonBuilder()
+            .setLabel('Learn more about AX Weapons')
+            .setStyle(Discord.ButtonStyle.Link)
+            .setURL('https://wiki.antixenoinitiative.com/en/weapons'),
+            new Discord.ButtonBuilder()
+            .setLabel('Guardian Unlocks')
+            .setStyle(Discord.ButtonStyle.Link)
+            .setURL('https://wiki.antixenoinitiative.com/en/guardianunlocks'),
+        );
+
+        interaction.reply({embeds: [returnEmbed.setTimestamp()], components: [actionRow]})
     }
 }

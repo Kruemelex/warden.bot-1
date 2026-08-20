@@ -1,7 +1,7 @@
 const {
     botIdent,
     fileNameBotMatch,
-    getCommunityEmbedAuthor,
+    getAxiWikiEmbedAuthor,
     getIdentityBrandColor,
 } = require('../../../functions');
 
@@ -30,7 +30,7 @@ module.exports = {
 				const returnEmbed = new Discord.EmbedBuilder()
 				.setColor(getIdentityBrandColor())
 				.setTitle("**Wiki Search**")
-				.setAuthor(getCommunityEmbedAuthor())
+				.setAuthor(getAxiWikiEmbedAuthor())
 				.setDescription(`Found **${res.length}** search results for "${searchTerm}"`)
 				for (let i = 0; i < res.length; i++) {
 				returnEmbed.addFields({ name: res[i].title, value: `https://wiki.antixenoinitiative.com/en/${res[i].path}`})
