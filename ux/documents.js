@@ -1,7 +1,7 @@
 'use strict';
 
 const DOCUMENT_KINDS = Object.freeze({
-    adminPanel: 'admin-panel',
+    uxPanel: 'ux-panel',
     challengeScreen: 'challenge-screen',
     notice: 'notice',
 });
@@ -10,6 +10,7 @@ const BLOCK_KINDS = Object.freeze({
     actions: 'actions',
     gallery: 'gallery',
     group: 'group',
+    separator: 'separator',
     section: 'section',
     text: 'text',
 });
@@ -81,6 +82,13 @@ function normalizeEditorBlock(block) {
         }
         return { kind, blocks: block.blocks.map(normalizeEditorBlock) };
     }
+    if (kind === BLOCK_KINDS.separator) {
+        return {
+            kind,
+            divider: block.divider !== false,
+            spacing: block.spacing ?? 'Large',
+        };
+    }
     if (kind === BLOCK_KINDS.gallery) {
         const items = normalizeMediaItems(block.items);
         if (items.length < 1) throw new Error('UX gallery blocks require at least one item.');
@@ -146,7 +154,7 @@ function createNoticeDocument({
     });
 }
 
-function createAdminPanelDocument({
+function createUXPanelDocument({
     title,
     description,
     accentColor,
@@ -160,10 +168,10 @@ function createAdminPanelDocument({
     pagination,
 } = {}) {
     const normalizedTitle = text(title);
-    if (!normalizedTitle) throw new Error('An admin panel requires a title.');
-    if (!Array.isArray(editorBlocks)) throw new Error('Admin panel editorBlocks must be an array.');
+    if (!normalizedTitle) throw new Error('A UX panel requires a title.');
+    if (!Array.isArray(editorBlocks)) throw new Error('UX panel editorBlocks must be an array.');
     return finishDocument({
-        kind: DOCUMENT_KINDS.adminPanel,
+        kind: DOCUMENT_KINDS.uxPanel,
         accentColor,
         title: normalizedTitle,
         description: text(description),
@@ -217,7 +225,7 @@ function createChallengeScreenDocument({
 }
 
 module.exports = {
-    createAdminPanelDocument,
+    createUXPanelDocument,
     createChallengeScreenDocument,
     createNoticeDocument,
 };

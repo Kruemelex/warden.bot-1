@@ -80,7 +80,7 @@ function buildNoticeContainer(document) {
     return container;
 }
 
-function buildAdminContainer(document, editorBlocks, paginationRow) {
+function buildUXPanelContainer(document, editorBlocks, paginationRow) {
     const layout = getLayout(document.kind);
     const container = createContainer(document);
     const state = { count: 0 };
@@ -165,15 +165,15 @@ function buildPaginationBudgetRow(componentCount = 3) {
 function buildComponentPages(document, options) {
     if (document.kind === 'notice') return [[buildNoticeContainer(document)]];
     if (document.kind === 'challenge-screen') return [[buildChallengeContainer(document)]];
-    if (document.kind !== 'admin-panel') throw new Error(`Unsupported Components V2 UX document: ${document.kind}`);
+    if (document.kind !== 'ux-panel') throw new Error(`Unsupported Components V2 UX document: ${document.kind}`);
 
-    const full = [buildAdminContainer(document, document.editorBlocks)];
+    const full = [buildUXPanelContainer(document, document.editorBlocks)];
     if (countComponents(full) <= DISCORD_MESSAGE_LIMITS.componentsV2) return [full];
     if (document.editorBlocks.length < 2) {
-        throw new Error('One admin editor area exceeds Discord\'s 40-component limit and cannot be split safely.');
+        throw new Error('One UX editor area exceeds Discord\'s 40-component limit and cannot be split safely.');
     }
     if (typeof options.paginationRowFactory !== 'function') {
-        throw new Error('Admin panel pagination requires a paginationRowFactory.');
+        throw new Error('UX panel pagination requires a paginationRowFactory.');
     }
 
     // The inert budget row is intentionally route-free. Only final rows may
@@ -182,16 +182,16 @@ function buildComponentPages(document, options) {
     const pageBlocks = partitionBlocksByBudget({
         blocks: document.editorBlocks,
         fits: (blocks) => {
-            const candidate = [buildAdminContainer(document, blocks, budgetRow)];
+            const candidate = [buildUXPanelContainer(document, blocks, budgetRow)];
             return countComponents(candidate) <= DISCORD_MESSAGE_LIMITS.componentsV2;
         },
         createOversizedBlockError: () => new Error(
-            'One admin editor block exceeds Discord\'s 40-component limit and cannot be split safely.',
+            'One UX editor block exceeds Discord\'s 40-component limit and cannot be split safely.',
         ),
     });
     return pageBlocks.map((blocks, page) => {
         const row = options.paginationRowFactory({ page, pageCount: pageBlocks.length, document });
-        const components = [buildAdminContainer(document, blocks, row)];
+        const components = [buildUXPanelContainer(document, blocks, row)];
         assertComponentBudget(components);
         return components;
     });
