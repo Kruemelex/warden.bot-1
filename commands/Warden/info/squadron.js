@@ -12,7 +12,7 @@ const SQUADRON_GUIDANCE = `We have an in-game squadron on PC, called **Anti Xeno
 
 2️⃣ Obtain the <@&380254463170183180> Rank. Learn more about how to obtain ranks in <#642837372228075549>. We require it for several reasons, one of them being the limit on the total squadron size (500 people total). If you are having trouble contact a <@&468153018899234816> for advice or help.
 
-3️⃣ Submit an application to our Inara Squadron [https://inara.cz/squadron/4358/](https://inara.cz/squadron/4358/). Please read the instructions carefully and provide all the requested information in the application form. You can apply to the Inara Squadron even if you don't have any ranks (as it is not limited in size), but you need the <@&380254463170183180> rank to be accepted into the in-game squadron. We only accept CMDRs with verified Inara accounts.
+3️⃣ Submit an application to our [Inara Squadron](https://inara.cz/squadron/4358/). Please read the instructions carefully and provide all the requested information in the application form. You can apply to the Inara Squadron even if you don't have any ranks (as it is not limited in size), but you need the <@&380254463170183180> rank to be accepted into the in-game squadron. We only accept CMDRs with verified Inara accounts.
 
 4️⃣ Submit an in-game squadron application. Note that you do not need to wait for processing of each step before proceeding to the next, as long as you do them at the same time. If you apply for the rank and submit two application at once, it will be easier for us to process them all at once. Just make sure each application is done correctly.
 
