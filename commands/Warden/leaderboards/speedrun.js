@@ -43,9 +43,6 @@ module.exports = {
 	.addStringOption(option => option.setName('link')
 		.setDescription('Include video link for proof (Please use shortened links)')
 		.setRequired(true))
-	.addUserOption(option => option.setName('user')
-		.setDescription('Select a user to submit on behalf of')
-		.setRequired(false))
 	.addStringOption(option => option.setName('comments')
 		.setDescription('Comment, banter, whatever')
 		.setRequired(false)),
@@ -77,7 +74,6 @@ module.exports = {
 		let digitsArray = args.milliseconds.toString().split('').map(Number)
 		if (!args.link.startsWith('https://')) { return interaction.editReply({ content: `❌ Please enter a valid URL, eg: https://...` }) }
 		if (digitsArray.length < 2) { return interaction.editReply({ content: `❌ Please enter the Milliseconds with 3 digits. ` }) }
-		if (args.user !== undefined) { user = args.user }
 		if (args.comments == undefined) { args.comments = '-' }
 		let name
 		// const timewithmilliseconds = Number(`${args.time}` + `${args.milliseconds}`)
