@@ -30,13 +30,16 @@ const {
 const {
     INTERCEPTOR_OPTIONS,
     SIZE_OPTIONS,
+    interceptorOptionsForIdentity,
     labelFor,
+    mountOptionsForIdentity,
     optionsForMount,
     optionsForWeapon,
+    weaponOptionsForIdentity,
     weapons,
 } = require('./catalog');
 const { MAX_ITERATION, buildMttotEmbed, simulateMttot } = require('./calculator');
-const { resolveMttotBrandColor } = require('./identity');
+const { resolveMttotBrandColor, resolveMttotIdentityName } = require('./identity');
 const {
     MAX_UNIQUE_WEAPON_TYPES,
     MAX_WEAPON_QUANTITY,
@@ -73,6 +76,7 @@ function initialFlow(interaction) {
         brandColor: resolveMttotBrandColor(),
         cooldownUntilMs: null,
         interceptor: null,
+        identityName: resolveMttotIdentityName(),
         pendingWeapon: weapons.length === 0 ? createPendingWeapon() : null,
         publicationAttempt: null,
         publicationNonce: randomBytes(12).toString('hex'),
@@ -139,7 +143,7 @@ function interceptorBlock(flow, session) {
                     'interceptor',
                     'environment',
                     'Choose an Interceptor...',
-                    INTERCEPTOR_OPTIONS,
+                    interceptorOptionsForIdentity(flow.identityName),
                     flow.interceptor ? [flow.interceptor] : [],
                 )],
             },
@@ -272,7 +276,10 @@ function pendingWeaponBlock(flow, session) {
             action: 'mount',
             disabled: !mountAvailable,
             options: mountAvailable
-                ? eligibleMountOptions(flow, pending.size, pending.quantity)
+                ? mountOptionsForIdentity(
+                    eligibleMountOptions(flow, pending.size, pending.quantity),
+                    flow.identityName,
+                )
                 : unavailableOption('Select quantity and size first'),
             placeholder: mountAvailable ? 'Choose mount type...' : 'Select quantity and size first...',
             selected: hasMount ? [pending.mount] : [],
@@ -281,7 +288,10 @@ function pendingWeaponBlock(flow, session) {
             action: 'weapon',
             disabled: !weaponAvailable,
             options: weaponAvailable
-                ? eligibleWeaponOptions(flow, pending.size, pending.mount, pending.quantity)
+                ? weaponOptionsForIdentity(
+                    eligibleWeaponOptions(flow, pending.size, pending.mount, pending.quantity),
+                    flow.identityName,
+                )
                 : unavailableOption('Select a mount type first'),
             placeholder: weaponAvailable ? 'Choose weapon...' : 'Select a mount type first...',
             selected: [],

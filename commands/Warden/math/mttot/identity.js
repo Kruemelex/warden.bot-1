@@ -8,37 +8,32 @@ function supportsMttotIdentity(botName) {
     return MTTOT_IDENTITY_BOTS.has(String(botName ?? ''));
 }
 
+function resolveMttotIdentityName({ getBotIdentity = botIdent } = {}) {
+    const activeBotName = String(getBotIdentity?.()?.activeBot?.botName ?? '').trim();
+    if (!activeBotName) return 'Warden';
+    if (!supportsMttotIdentity(activeBotName)) {
+        throw new Error(`MTToT is unavailable for the active ${activeBotName} identity.`);
+    }
+    return activeBotName;
+}
+
 function resolveMttotBrandColor({
     getBotIdentity = botIdent,
     getColor = getIdentityBrandColor,
 } = {}) {
-    const activeBotName = String(getBotIdentity?.()?.activeBot?.botName ?? '').trim();
-    if (!activeBotName) {
-        // Unit tests and isolated command loading do not necessarily select an
-        // active identity. Warden is the legacy presentation default only in
-        // that explicit no-identity state.
-        return getColor('Warden');
-    }
-    if (!supportsMttotIdentity(activeBotName)) {
-        throw new Error(`MTToT is unavailable for the active ${activeBotName} identity.`);
-    }
-    return getColor(activeBotName);
+    return getColor(resolveMttotIdentityName({ getBotIdentity }));
 }
 
 function resolveMttotEmbedAuthor({
     getBotIdentity = botIdent,
     getAuthor = getIdentityEmbedAuthor,
 } = {}) {
-    const activeBotName = String(getBotIdentity?.()?.activeBot?.botName ?? '').trim();
-    if (!activeBotName) return getAuthor('Warden');
-    if (!supportsMttotIdentity(activeBotName)) {
-        throw new Error(`MTToT is unavailable for the active ${activeBotName} identity.`);
-    }
-    return getAuthor(activeBotName);
+    return getAuthor(resolveMttotIdentityName({ getBotIdentity }));
 }
 
 module.exports = {
     resolveMttotBrandColor,
     resolveMttotEmbedAuthor,
+    resolveMttotIdentityName,
     supportsMttotIdentity,
 };
