@@ -142,6 +142,7 @@ function buildStringSelectOption(option, selectedValues) {
         .setLabel(truncateSelectText(option.label ?? option.value))
         .setValue(String(option.value));
     if (option.description) selectOption.setDescription(truncateSelectText(option.description));
+    if (option.emoji) selectOption.setEmoji(option.emoji);
     if (selectedValues.has(String(option.value))) selectOption.setDefault(true);
     return selectOption;
 }
