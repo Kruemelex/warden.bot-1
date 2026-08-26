@@ -27,7 +27,11 @@ module.exports = {
         const actionRow = new Discord.ActionRowBuilder()
         .addComponents(
             new Discord.ButtonBuilder()
-            .setLabel('Learn more about Distress Calls')
+            .setLabel('Static Signal Sources')
+            .setStyle(Discord.ButtonStyle.Link)
+            .setURL('https://wiki.antixenoinitiative.com/en/static-signals'),
+            new Discord.ButtonBuilder()
+            .setLabel('Distresscall Analysis HR 1185')
             .setStyle(Discord.ButtonStyle.Link)
             .setURL('https://wiki.antixenoinitiative.com/en/distress-call-analysis'),
         );
