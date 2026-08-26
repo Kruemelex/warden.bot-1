@@ -96,5 +96,12 @@
         "description": "MTToT for 2m2s Gauss Cannons",
         "link": "https://cdn.discordapp.com/attachments/427410720477675530/1060283596969087096/MTToT_Chart.png",
         "type": "text"
+    },
+    {
+        "argument": "thargoid markings",
+        "title": "Thargoid Markings",
+        "description": "Thargoid Markings",
+        "link": "https://wiki.antixenoinitiative.com/thargoid_markings.png",
+        "type": "text"
     }
 ]
