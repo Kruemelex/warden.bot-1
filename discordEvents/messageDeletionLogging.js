@@ -5,10 +5,6 @@ const AUDIT_RECONCILIATION_DELAYS_MS = [1_000, 2_000, 3_000, 3_000]
 const AUDIT_ENTRY_MAX_AGE_MS = 30_000
 const AUDIT_BUFFER_TTL_MS = 60_000
 const AUDIT_BUFFER_MAX_ENTRIES = 320
-const DISCORD_EPOCH = 1_420_070_400_000n
-const MAX_DISCORD_SNOWFLAKE = (1n << 64n) - 1n
-const MAX_MESSAGE_TIMESTAMP = Number((MAX_DISCORD_SNOWFLAKE >> 22n) + DISCORD_EPOCH)
-const INVALID_MESSAGE_TIMESTAMP = Number.MAX_SAFE_INTEGER
 
 function sleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -24,31 +20,10 @@ function collectionValues(collection) {
     return Array.isArray(collection) ? collection : []
 }
 
-function auditEntries(logs) { return collectionValues(logs?.entries) }
-
-function auditChannelId(entry) {
-    return entry?.extra?.channel?.id
-        ?? entry?.extra?.channelId
-        ?? entry?.extra?.channel_id
-        ?? null
-}
-
-function auditTargetId(entry) {
-    return entry?.target?.id ?? entry?.targetId ?? entry?.target_id ?? null
-}
-
-function auditExecutorId(entry) {
-    return entry?.executor?.id ?? entry?.executorId ?? entry?.executor_id ?? null
-}
-
-function auditExecutor(entry) {
-    const id = auditExecutorId(entry)
-    return id == null ? null : entry?.executor?.id ? entry.executor : { id }
-}
-
-function bulkAuditChannelId(entry) {
-    return entry?.target?.id ?? auditChannelId(entry)
-}
+const auditChannelId = (entry) => entry?.extra?.channel?.id ?? entry?.extra?.channelId ?? null
+const auditTargetId = (entry) => entry?.target?.id ?? entry?.targetId ?? null
+const auditExecutorId = (entry) => entry?.executor?.id ?? entry?.executorId ?? null
+const bulkAuditChannelId = (entry) => entry?.target?.id ?? auditChannelId(entry)
 
 function auditCount(entry) {
     const count = Number(entry?.extra?.count)
@@ -64,50 +39,32 @@ function auditEntryKey(entry, type) {
     return `${type}:${String(entry?.id ?? `${auditExecutorId(entry) ?? ''}:${entryTimestamp(entry)}:${auditTargetId(entry) ?? ''}:${channelId ?? ''}`)}`
 }
 
-function isValidMessageTimestamp(timestamp) {
-    return Number.isSafeInteger(timestamp)
-        && timestamp >= Number(DISCORD_EPOCH)
-        && timestamp <= MAX_MESSAGE_TIMESTAMP
+function messageTimestamp(message) {
+    const cached = Number(message?.createdTimestamp)
+    if (Number.isSafeInteger(cached) && cached > 0) return cached
+    const createdAt = Number(message?.createdAt?.getTime?.())
+    if (Number.isSafeInteger(createdAt) && createdAt > 0) return createdAt
+    if (typeof message?.id !== 'string' || !/^[1-9]\d{16,18}$/u.test(message.id)) return null
+    const timestamp = discordTimestamp(message.id)
+    return Number.isSafeInteger(timestamp) && timestamp > 0 ? timestamp : null
 }
 
-function snowflakeTimestamp(id) {
-    if (typeof id !== 'string' && typeof id !== 'bigint') return null
-    const text = String(id)
-    if (!/^[1-9]\d*$/u.test(text)) return null
+function discordTimestamp(id) {
     try {
-        const snowflake = BigInt(text)
-        if (snowflake > MAX_DISCORD_SNOWFLAKE) return null
-        const timestamp = Number((snowflake >> 22n) + DISCORD_EPOCH)
-        return isValidMessageTimestamp(timestamp) ? timestamp : null
+        return Number(Discord.SnowflakeUtil.timestampFrom(id))
     } catch {
         return null
     }
 }
 
-function messageTimestamp(message) {
-    if (isValidMessageTimestamp(message?.createdTimestamp)) return Number(message.createdTimestamp)
-    const createdAt = message?.createdAt?.getTime?.()
-    if (isValidMessageTimestamp(createdAt)) return createdAt
-    return snowflakeTimestamp(message?.id) ?? INVALID_MESSAGE_TIMESTAMP
-}
-
 function messageCreatedAt(message) {
     const timestamp = messageTimestamp(message)
-    return timestamp === INVALID_MESSAGE_TIMESTAMP ? '' : new Date(timestamp).toISOString()
-}
-
-function messageCreatedTimestamp(message) {
-    const timestamp = messageTimestamp(message)
-    return timestamp === INVALID_MESSAGE_TIMESTAMP
-        ? ''
-        : `<t:${Math.floor(timestamp / 1000)}:F>`
+    return timestamp == null ? '' : new Date(timestamp).toISOString()
 }
 
 function attachmentUrls(message) {
     const attachments = message?.attachments
-    const values = attachments?.values
-        ? Array.from(attachments.values())
-        : Array.isArray(attachments) ? attachments : []
+    const values = attachments?.values ? Array.from(attachments.values()) : Array.isArray(attachments) ? attachments : []
     return values.map((attachment) => attachment?.url ?? attachment?.proxyURL ?? String(attachment ?? ''))
         .filter(Boolean)
         .join('\n')
@@ -120,7 +77,7 @@ function csvEscape(value) {
 }
 
 function sortMessages(messages) {
-    return [...messages].sort((left, right) => messageTimestamp(left) - messageTimestamp(right)
+    return [...messages].sort((left, right) => (messageTimestamp(left) ?? Number.MAX_SAFE_INTEGER) - (messageTimestamp(right) ?? Number.MAX_SAFE_INTEGER)
         || String(left?.id ?? '').localeCompare(String(right?.id ?? '')))
 }
 
@@ -150,18 +107,19 @@ function makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deleted
     const author = message?.author
     const member = message?.member ?? message?.guild?.members?.cache?.get?.(author?.id)
     const name = member?.displayName ?? author?.globalName ?? author?.username ?? author?.tag ?? 'Unknown message author'
-    const avatarSource = typeof member?.displayAvatarURL === 'function' ? member
-        : typeof author?.displayAvatarURL === 'function' ? author : null
-    const iconURL = avatarSource?.displayAvatarURL({ dynamic: true })
-    const actor = deletedBy?.id
-        ? `<@${deletedBy.id}>`
-        : 'record unavailable'
-    const createdTimestamp = messageCreatedTimestamp(message)
+    const avatarSource = typeof member?.displayAvatarURL === 'function' ? member : author
+    const iconURL = typeof avatarSource?.displayAvatarURL === 'function' ? avatarSource.displayAvatarURL({ dynamic: true }) : undefined
+    const timestamp = messageTimestamp(message)
+    const channelId = messageChannelId(message)
+    const contentFooter = [
+        timestamp == null ? null : `Created at: <t:${Math.floor(timestamp / 1000)}:F>`,
+        `Channel: ${channelId ? `<#${channelId}>` : 'record unavailable'}`,
+    ].filter(Boolean).join('\n')
     return buildCopyableMessageEmbeds({
         title: 'Message Deleted 🗑️',
-        searchableText: `Deleted by: ${actor}\nMessage Author: ${author?.id ? `<@${author.id}>` : 'record unavailable'}`,
+        searchableText: `Deleted by: ${deletedBy?.id ? `<@${deletedBy.id}>` : 'record unavailable'}\nMessage Author: ${author?.id ? `<@${author.id}>` : 'record unavailable'}`,
         contentLabel: 'Message', content: message?.content != null ? message.content : 'Cache Empty',
-        contentFooter: createdTimestamp ? `Created at: ${createdTimestamp}` : undefined,
+        contentFooter,
         author: iconURL ? { name, iconURL } : { name },
     })
 }
@@ -193,15 +151,13 @@ function createMessageDeletionLogger({
     if (typeof buildCopyableMessageEmbeds !== 'function') throw new Error('A message embed builder is required.')
 
     const guildStates = new Map()
-    const singleQueues = new Map()
-    const singleWorkers = new Map()
     let cleanupTimer = null
 
     function sweepExpiredState() {
         const currentTime = now()
         for (const [guildId, state] of guildStates) {
             pruneRecords(state, currentTime)
-            if (!state.records.size && !singleQueues.has(guildId)) {
+            if (!state.records.size && !state.queue && !state.worker) {
                 guildStates.delete(guildId)
             }
         }
@@ -220,7 +176,7 @@ function createMessageDeletionLogger({
 
     function stateForGuild(guildId) {
         const existing = guildStates.get(guildId)
-        const state = existing ?? { records: new Map() }
+        const state = existing ?? { records: new Map(), queue: null, worker: null }
         guildStates.set(guildId, state)
         if (!existing) scheduleCleanup()
         pruneRecords(state, now())
@@ -235,8 +191,7 @@ function createMessageDeletionLogger({
         for (const [key] of recent.slice(AUDIT_BUFFER_MAX_ENTRIES)) state.records.delete(key)
     }
 
-    function mergeEntries(guildId, type, entries, preferCurrent = false) {
-        const state = stateForGuild(guildId)
+    function mergeEntries(state, type, entries, preferCurrent = false) {
         const currentTime = now()
         for (const entry of entries) {
             if (!(type === 73 ? entry?.executor?.id : auditExecutorId(entry))) continue
@@ -255,124 +210,97 @@ function createMessageDeletionLogger({
         scheduleCleanup()
     }
 
-    function bufferedEntries(guildId, type) {
-        return [...stateForGuild(guildId).records.values()]
+    function bufferedEntries(state, type) {
+        return [...state.records.values()]
             .filter((record) => record.type === type && isRecent(record.entry, now()))
     }
 
-    async function fetchEntries(guild, type) {
+    async function fetchEntries(guild, state, type) {
         const logs = await guild.fetchAuditLogs({ type, limit: 20 })
-        mergeEntries(guild.id, type, auditEntries(logs), true)
-        return bufferedEntries(guild.id, type)
+        mergeEntries(state, type, collectionValues(logs?.entries), true)
     }
 
-    function candidatesForMessage(records, message) {
-        const authorId = message?.author?.id
-        const channelId = messageChannelId(message)
-        if (!authorId || !channelId) return []
-        return records.filter((record) => (
-            auditExecutorId(record.entry)
-            && sameId(auditTargetId(record.entry), authorId)
-            && sameId(auditChannelId(record.entry), channelId)
+    function singleGroups(records) {
+        const groups = new Map()
+        for (const record of records) {
+            const authorId = record.message?.author?.id
+            const channelId = messageChannelId(record.message)
+            const key = `${authorId ?? ''}\0${channelId ?? ''}`
+            const group = groups.get(key) ?? { authorId, channelId, records: [], observed: new Map() }
+            group.records.push(record)
+            groups.set(key, group)
+        }
+        return [...groups.values()]
+    }
+
+    function openSingleMatches(state, group) {
+        if (!group.authorId || !group.channelId) return []
+        return bufferedEntries(state, 72).filter((record) => (
+            !record.closedForSingles
+            && sameId(auditTargetId(record.entry), group.authorId)
+            && sameId(auditChannelId(record.entry), group.channelId)
         ))
     }
 
-    function resolveSingleBatch(guildId, pending) {
-        const state = stateForGuild(guildId)
-        const candidates = new Map()
-        const matched = new Map()
-        const groups = new Map()
-        const records = bufferedEntries(guildId, 72)
-
-        for (const pendingRecord of pending) {
-            const matches = candidatesForMessage(records, pendingRecord.message)
-            candidates.set(pendingRecord, matches)
-            const openMatches = matches.filter((record) => !record.closedForSingles)
-            const channelId = messageChannelId(pendingRecord.message)
-            if (!openMatches.length || new Set(openMatches.map((record) => auditExecutorId(record.entry))).size > 1) continue
-            const key = `${pendingRecord.message.author.id}\0${channelId}\0${auditExecutorId(openMatches[0].entry)}`
-            const group = groups.get(key) ?? []
-            group.push(pendingRecord)
-            groups.set(key, group)
-        }
-        for (const group of groups.values()) {
-            const common = candidates.get(group[0]).filter((candidate) => group.every((record) => (
-                candidates.get(record).some((other) => other.key === candidate.key)
-            )))
-            const eligible = common.filter((candidate) => !candidate.closedForSingles
-                && candidate.consumedSingles < candidate.count)
-            const available = eligible.reduce((total, candidate) => total + candidate.count - candidate.consumedSingles, 0)
-            if (available < group.length) continue
-            for (const record of group) {
+    function resolveSingleGroups(state, groups, matched) {
+        const unresolved = []
+        for (const group of groups) {
+            const matches = openSingleMatches(state, group)
+            for (const record of matches) group.observed.set(record.key, record)
+            const executors = new Set(matches.map((record) => auditExecutorId(record.entry)))
+            const eligible = matches.filter((record) => record.consumedSingles < record.count)
+            const available = eligible.reduce((total, record) => total + record.count - record.consumedSingles, 0)
+            if (executors.size !== 1 || available < group.records.length) {
+                unresolved.push(group)
+                continue
+            }
+            for (const pending of group.records) {
                 const candidate = eligible.find((entry) => entry.consumedSingles < entry.count)
                 candidate.consumedSingles += 1
                 candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
-                matched.set(record, auditExecutor(candidate.entry))
+                matched.set(pending, candidate.entry.executor ?? { id: auditExecutorId(candidate.entry) })
             }
         }
         pruneRecords(state, now())
         if (matched.size) scheduleCleanup()
-        return { matched, candidates }
+        return unresolved
     }
 
-    function closeUnresolvedSingles(guildId, observedCandidates, unresolved) {
-        const state = stateForGuild(guildId)
-        for (const record of unresolved) {
-            const candidates = observedCandidates.get(record) ?? []
-            for (const candidate of candidates) {
-                candidate.consumedSingles = Math.max(candidate.consumedSingles, candidate.count)
-                candidate.closedForSingles = true
-                candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
-            }
+    function closeUnresolvedGroups(state, groups) {
+        for (const group of groups) for (const record of group.observed.values()) {
+            record.consumedSingles = Math.max(record.consumedSingles, record.count)
+            record.closedForSingles = true
+            record.expiresAt = now() + AUDIT_BUFFER_TTL_MS
         }
         pruneRecords(state, now())
         scheduleCleanup()
     }
 
-    function mergeObservedCandidates(observed, candidates) {
-        for (const [record, records] of candidates) {
-            const current = observed.get(record) ?? []
-            const known = new Set(current.map((candidate) => candidate.key))
-            observed.set(record, current.concat(records.filter((candidate) => !known.has(candidate.key))))
-        }
-    }
-
-    function applySingleResolution(guildId, pending, observedCandidates, matched) {
-        const resolution = resolveSingleBatch(guildId, pending)
-        mergeObservedCandidates(observedCandidates, resolution.candidates)
-        for (const [record, executor] of resolution.matched) matched.set(record, executor)
-        return pending.filter((record) => !matched.has(record))
-    }
-
-    async function attemptSingleDelivery(errors, message, deletedBy) {
+    async function attemptSingleDelivery(errors, record, deletedBy) {
         try {
-            for (const embed of makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deletedBy })) {
-                await botLog(message.guild, embed, 1, 'messages')
+            for (const embed of makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message: record.message, deletedBy })) {
+                await botLog(record.message.guild, embed, 1, 'messages')
             }
         } catch (error) {
             errors.push(error)
         }
     }
 
-    async function reconcileSingleQueue(guildId) {
-        const queue = singleQueues.get(guildId)
-        if (!queue?.readyForReconciliation) return
-        singleQueues.delete(guildId)
-        const pending = [...queue.records]
-        const observedCandidates = new Map()
+    async function reconcileSingleQueue(state, queue) {
+        const groups = singleGroups(queue.records)
         const matched = new Map()
-        let unresolved = applySingleResolution(guildId, pending, observedCandidates, matched)
+        let unresolved = resolveSingleGroups(state, groups, matched)
         const fetchErrors = []
         let fetchedAuditRecords = false
         for (const delay of reconciliationDelays) {
             if (!unresolved.length) break
             await wait(delay)
-            unresolved = applySingleResolution(guildId, unresolved, observedCandidates, matched)
+            unresolved = resolveSingleGroups(state, unresolved, matched)
             if (!unresolved.length) break
             try {
-                await fetchEntries(queue.guild, 72)
+                await fetchEntries(queue.guild, state, 72)
                 fetchedAuditRecords = true
-                unresolved = applySingleResolution(guildId, unresolved, observedCandidates, matched)
+                unresolved = resolveSingleGroups(state, unresolved, matched)
             } catch (error) {
                 fetchErrors.push(error)
             }
@@ -382,49 +310,49 @@ function createMessageDeletionLogger({
         }
         try {
             const deliveryErrors = []
-            for (const [record, executor] of matched) {
-                await attemptSingleDelivery(deliveryErrors, record.message, executor)
-            }
-            closeUnresolvedSingles(guildId, observedCandidates, unresolved)
-            for (const record of unresolved) {
-                await attemptSingleDelivery(deliveryErrors, record.message, 'unavailable')
+            closeUnresolvedGroups(state, unresolved)
+            for (const record of queue.records) {
+                await attemptSingleDelivery(deliveryErrors, record, matched.get(record) ?? 'unavailable')
             }
             if (deliveryErrors.length) throw new AggregateError(deliveryErrors, 'Message deletion BotLog delivery failed.')
         } finally {
-            for (const record of pending) record.resolve()
+            for (const record of queue.records) record.resolve()
         }
     }
 
     function recordSingleDeletion(message) {
         const guild = message?.guild
         if (!guild?.id) return Promise.resolve()
-        let queue = singleQueues.get(guild.id)
+        const state = stateForGuild(guild.id)
+        let queue = state.queue
         if (!queue) {
-            queue = { guild, records: [], readyForReconciliation: false }
-            singleQueues.set(guild.id, queue)
-            Promise.resolve().then(() => wait(batchDelay)).then(() => {
-                queue.readyForReconciliation = true
-                startSingleQueueWorker(guild.id)
-            })
-                .catch((error) => console.error('Message deletion logging failed:', error))
+            queue = { guild, records: [], readyAt: now() + batchDelay }
+            state.queue = queue
+            startSingleWorker(guild.id, state)
         }
         return new Promise((resolve) => queue.records.push({ message, resolve }))
     }
 
-    function startSingleQueueWorker(guildId) {
-        if (singleWorkers.has(guildId)) return
+    function startSingleWorker(guildId, state) {
+        if (state.worker) return
+        const queue = state.queue
+        if (!queue) return
+        let collectionFinished = false
         const worker = (async () => {
-            while (singleQueues.get(guildId)?.readyForReconciliation) await reconcileSingleQueue(guildId)
+            await wait(Math.max(0, queue.readyAt - now()))
+            collectionFinished = true
+            if (state.queue === queue) state.queue = null
+            await reconcileSingleQueue(state, queue)
         })()
-        singleWorkers.set(guildId, worker)
         worker.catch((error) => console.error('Message deletion logging failed:', error)).finally(() => {
-            singleWorkers.delete(guildId)
-            if (singleQueues.get(guildId)?.readyForReconciliation) startSingleQueueWorker(guildId)
+            state.worker = null
+            if (collectionFinished && state.queue) startSingleWorker(guildId, state)
         })
+        state.worker = worker
     }
 
-    function resolveBulk(guildId, channelId, count) {
-        const candidates = channelId ? bufferedEntries(guildId, 73).filter((record) => (
+    function resolveBulk(state, channelId, count) {
+        const candidates = channelId ? bufferedEntries(state, 73).filter((record) => (
             record.entry?.executor?.id
             && sameId(bulkAuditChannelId(record.entry), channelId)
             && record.count === count
@@ -434,7 +362,7 @@ function createMessageDeletionLogger({
         const candidate = candidates.sort((left, right) => entryTimestamp(right.entry) - entryTimestamp(left.entry))[0]
         candidate.bulkConsumed = true
         candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
-        pruneRecords(stateForGuild(guildId), now())
+        pruneRecords(state, now())
         scheduleCleanup()
         return candidate.entry.executor
     }
@@ -445,12 +373,13 @@ function createMessageDeletionLogger({
         const guild = channel?.guild ?? records[0]?.guild
         if (!guild?.id) return
         const channelId = channel?.id ?? messageChannelId(records[0])
+        const state = stateForGuild(guild.id)
         await wait(batchDelay)
-        let executor = resolveBulk(guild.id, channelId, records.length)
+        let executor = resolveBulk(state, channelId, records.length)
         if (!executor) {
             try {
-                await fetchEntries(guild, 73)
-                executor = resolveBulk(guild.id, channelId, records.length)
+                await fetchEntries(guild, state, 73)
+                executor = resolveBulk(state, channelId, records.length)
             } catch (error) {
                 console.error('Bulk message deletion audit reconciliation failed:', error)
             }
@@ -479,7 +408,7 @@ function createMessageDeletionLogger({
     function recordAuditEntry(entry, guild) {
         const type = Number(entry?.action ?? entry?.actionType)
         if ((type !== 72 && type !== 73) || !guild?.id) return
-        mergeEntries(guild.id, type, [entry])
+        mergeEntries(stateForGuild(guild.id), type, [entry])
     }
 
     return { recordAuditEntry, recordSingleDeletion, recordBulkDeletion, sweepExpiredState }
