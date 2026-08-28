@@ -28,7 +28,7 @@ function buildCopyableMessageEmbeds({
 }) {
     const normalizedContent = neutralizeCodeFences(content)
     const codeBlockOverhead = wrapCodeBlock('').length
-    const messageLinkFooter = messageLink ? `\n\n**Message Link:** ${messageLink}` : ''
+    const messageLinkFooter = messageLink ? `\nLink: ${messageLink}` : ''
     const contentFooterText = contentFooter ? `\n${contentFooter}` : ''
     const finalFooter = `${messageLinkFooter}${contentFooterText}`
 
@@ -1047,7 +1047,7 @@ const exp = {
 
             const updatedByValue = `<@${newMessage.author.id}>`
             const messageAuthor = buildMessageAuthorHeader(newMessage)
-            const searchableText = `Message updated by user: ${updatedByValue}`
+            const searchableText = `Message updated by: ${updatedByValue}`
             const oldEmbeds = buildCopyableMessageEmbeds({
                 title: 'Message Updated 📝',
                 searchableText,
