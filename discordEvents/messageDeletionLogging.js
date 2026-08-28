@@ -3,24 +3,24 @@ const Discord = require('discord.js')
 const RECONCILIATION_DELAY_MS = 1_500
 const AUDIT_ENTRY_MAX_AGE_MS = 30_000
 const AUDIT_BUFFER_TTL_MS = 60_000
-const AUDIT_BUFFER_MAX_ENTRIES = 160
-const AUDIT_USAGE_MAX_ENTRIES = 320
+const AUDIT_BUFFER_MAX_ENTRIES = 320
 const DISCORD_EPOCH = 1_420_070_400_000n
 
 function sleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-function auditEntries(logs) {
-    const entries = logs?.entries
-    if (!entries) return []
-    if (typeof entries.values === 'function') return Array.from(entries.values())
-    if (typeof entries.first === 'function') {
-        const first = entries.first()
+function collectionValues(collection) {
+    if (!collection) return []
+    if (typeof collection.values === 'function') return Array.from(collection.values())
+    if (typeof collection.first === 'function') {
+        const first = collection.first()
         return first ? [first] : []
     }
-    return Array.isArray(entries) ? entries : []
+    return Array.isArray(collection) ? collection : []
 }
+
+function auditEntries(logs) { return collectionValues(logs?.entries) }
 
 function auditChannelId(entry) {
     return entry?.extra?.channel?.id
@@ -106,20 +106,13 @@ function buildBulkCsv(messages) {
     ].join('\n')}\n`
 }
 
-function buildMessageAuthorHeader(message) {
+function makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deletedBy }) {
     const author = message?.author
     const member = message?.member ?? message?.guild?.members?.cache?.get?.(author?.id)
     const name = member?.displayName ?? author?.globalName ?? author?.username ?? author?.tag ?? 'Unknown message author'
-    const iconURL = typeof member?.displayAvatarURL === 'function'
-        ? member.displayAvatarURL({ dynamic: true })
-        : typeof author?.displayAvatarURL === 'function'
-            ? author.displayAvatarURL({ dynamic: true })
-            : undefined
-    return iconURL ? { name, iconURL } : { name }
-}
-
-function makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deletedBy }) {
-    const authorId = message?.author?.id
+    const avatarSource = typeof member?.displayAvatarURL === 'function' ? member
+        : typeof author?.displayAvatarURL === 'function' ? author : null
+    const iconURL = avatarSource?.displayAvatarURL({ dynamic: true })
     const actor = deletedBy?.id
         ? `<@${deletedBy.id}>`
         : deletedBy === 'self'
@@ -127,31 +120,23 @@ function makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deleted
             : 'record unavailable'
     return buildCopyableMessageEmbeds({
         title: 'Message Deleted 🗑️',
-        searchableText: `Deleted by: ${actor}\nMessage Author: ${authorId ? `<@${authorId}>` : 'record unavailable'}`,
+        searchableText: `Deleted by: ${actor}\nMessage Author: ${author?.id ? `<@${author.id}>` : 'record unavailable'}`,
         contentLabel: 'Message', content: message?.content != null ? message.content : 'Cache Empty',
-        author: buildMessageAuthorHeader(message),
+        author: iconURL ? { name, iconURL } : { name },
     })
-}
-
-function collectionValues(messages) {
-    if (!messages) return []
-    if (typeof messages.values === 'function') return Array.from(messages.values())
-    return Array.isArray(messages) ? messages : []
 }
 
 function sameId(left, right) {
     return left != null && right != null && String(left) === String(right)
 }
 
+function messageChannelId(message) {
+    return message?.channelId ?? message?.channel?.id
+}
+
 function isRecent(entry, currentTime) {
     const timestamp = entryTimestamp(entry)
     return timestamp > 0 && Math.abs(currentTime - timestamp) <= AUDIT_ENTRY_MAX_AGE_MS
-}
-
-function pruneUsage(usage, currentTime) {
-    for (const [key, record] of usage) if (record.expiresAt <= currentTime) usage.delete(key)
-    const newest = [...usage.entries()].sort(([, left], [, right]) => right.expiresAt - left.expiresAt)
-    for (const [key] of newest.slice(AUDIT_USAGE_MAX_ENTRIES)) usage.delete(key)
 }
 
 function createMessageDeletionLogger({
@@ -173,10 +158,8 @@ function createMessageDeletionLogger({
     function sweepExpiredState() {
         const currentTime = now()
         for (const [guildId, state] of guildStates) {
-            for (const [key, record] of state.entries) if (record.expiresAt <= currentTime) state.entries.delete(key)
-            pruneUsage(state.singleUsage, currentTime)
-            pruneUsage(state.bulkUsage, currentTime)
-            if (!state.entries.size && !state.singleUsage.size && !state.bulkUsage.size && !pendingSingles.has(guildId)) {
+            pruneRecords(state, currentTime)
+            if (!state.records.size && !pendingSingles.has(guildId)) {
                 guildStates.delete(guildId)
             }
         }
@@ -195,15 +178,19 @@ function createMessageDeletionLogger({
 
     function stateForGuild(guildId) {
         const existing = guildStates.get(guildId)
-        const state = existing ?? {
-            entries: new Map(), singleUsage: new Map(), bulkUsage: new Map(),
-        }
+        const state = existing ?? { records: new Map() }
         guildStates.set(guildId, state)
         if (!existing) scheduleCleanup()
-        const currentTime = now()
-        for (const [key, record] of state.entries) if (record.expiresAt <= currentTime) state.entries.delete(key)
-        for (const usage of [state.singleUsage, state.bulkUsage]) pruneUsage(usage, currentTime)
+        pruneRecords(state, now())
         return state
+    }
+
+    function pruneRecords(state, currentTime) {
+        for (const [key, record] of state.records) if (record.expiresAt <= currentTime) state.records.delete(key)
+        const recent = [...state.records.entries()].sort(([, left], [, right]) => (
+            right.expiresAt - left.expiresAt || entryTimestamp(right.entry) - entryTimestamp(left.entry)
+        ))
+        for (const [key] of recent.slice(AUDIT_BUFFER_MAX_ENTRIES)) state.records.delete(key)
     }
 
     function mergeEntries(guildId, type, entries, preferCurrent = false) {
@@ -212,22 +199,22 @@ function createMessageDeletionLogger({
         for (const entry of entries) {
             if (!entry?.executor?.id) continue
             const key = auditEntryKey(entry, type)
-            const existing = state.entries.get(key)
-            state.entries.set(key, {
-                entry: preferCurrent || !existing ? entry : existing.entry,
-                count: Math.max(existing?.count ?? 0, auditCount(entry)),
-                type,
-                expiresAt: currentTime + AUDIT_BUFFER_TTL_MS,
-            })
+            const existing = state.records.get(key)
+            const record = existing ?? {
+                key, type, consumedSingles: 0, bulkConsumed: false,
+            }
+            record.entry = preferCurrent || !existing || entryTimestamp(entry) >= entryTimestamp(existing.entry)
+                ? entry : existing.entry
+            record.count = Math.max(record.count ?? 0, auditCount(entry))
+            record.expiresAt = currentTime + AUDIT_BUFFER_TTL_MS
+            state.records.set(key, record)
         }
-        const relevant = [...state.entries.entries()]
-            .sort(([, left], [, right]) => entryTimestamp(right.entry) - entryTimestamp(left.entry))
-        for (const [key] of relevant.slice(AUDIT_BUFFER_MAX_ENTRIES)) state.entries.delete(key)
+        pruneRecords(state, currentTime)
         scheduleCleanup()
     }
 
     function bufferedEntries(guildId, type) {
-        return [...stateForGuild(guildId).entries.values()]
+        return [...stateForGuild(guildId).records.values()]
             .filter((record) => record.type === type && isRecent(record.entry, now()))
     }
 
@@ -239,7 +226,7 @@ function createMessageDeletionLogger({
 
     function candidatesForMessage(records, message) {
         const authorId = message?.author?.id
-        const channelId = message?.channelId ?? message?.channel?.id
+        const channelId = messageChannelId(message)
         if (!authorId || !channelId) return []
         return records.filter((record) => (
             record.entry?.executor?.id
@@ -252,7 +239,6 @@ function createMessageDeletionLogger({
         const state = stateForGuild(guildId)
         const candidates = new Map()
         const uncertainChannel = new Set()
-        const ambiguous = new Set()
         const matched = new Map()
         const groups = new Map()
         const records = bufferedEntries(guildId, 72)
@@ -260,57 +246,34 @@ function createMessageDeletionLogger({
         for (const pendingRecord of pending) {
             const matches = candidatesForMessage(records, pendingRecord.message)
             candidates.set(pendingRecord, matches)
-            const channelId = pendingRecord.message?.channelId ?? pendingRecord.message?.channel?.id
+            const channelId = messageChannelId(pendingRecord.message)
             if (channelId) {
                 const authorId = pendingRecord.message?.author?.id
                 if (records.some((record) => sameId(record.entry?.target?.id, authorId) && !auditChannelId(record.entry))) {
                     uncertainChannel.add(pendingRecord)
                 }
             }
-            if (new Set(matches.map((record) => record.entry.executor.id)).size > 1) ambiguous.add(pendingRecord)
-        }
-        for (const pendingRecord of pending) {
-            if (ambiguous.has(pendingRecord)) continue
-            const matches = candidates.get(pendingRecord)
-            if (!matches.length) continue
-            const message = pendingRecord.message
-            const key = `${message.author.id}\0${message.channelId ?? message.channel?.id}\0${matches[0].entry.executor.id}`
+            if (!matches.length || new Set(matches.map((record) => record.entry.executor.id)).size > 1) continue
+            const key = `${pendingRecord.message.author.id}\0${channelId}\0${matches[0].entry.executor.id}`
             const group = groups.get(key) ?? []
             group.push(pendingRecord)
             groups.set(key, group)
         }
         for (const group of groups.values()) {
             const common = candidates.get(group[0]).filter((candidate) => group.every((record) => (
-                candidates.get(record).some((other) => auditEntryKey(other.entry, 72) === auditEntryKey(candidate.entry, 72))
+                candidates.get(record).some((other) => other.key === candidate.key)
             )))
-            const available = common.reduce((total, candidate) => {
-                const used = state.singleUsage.get(auditEntryKey(candidate.entry, 72))?.used ?? 0
-                return total + Math.max(0, candidate.count - used)
-            }, 0)
-            if (available < group.length) {
-                continue
-            }
-            const allocated = new Map()
+            const available = common.reduce((total, candidate) => total + Math.max(0, candidate.count - candidate.consumedSingles), 0)
+            if (available < group.length) continue
             for (const record of group) {
-                const candidate = common.find((entry) => {
-                    const key = auditEntryKey(entry.entry, 72)
-                    return (state.singleUsage.get(key)?.used ?? 0) + (allocated.get(key) ?? 0) < entry.count
-                })
-                if (!candidate) break
-                const key = auditEntryKey(candidate.entry, 72)
-                allocated.set(key, (allocated.get(key) ?? 0) + 1)
+                const candidate = common.find((entry) => entry.consumedSingles < entry.count)
+                candidate.consumedSingles += 1
+                candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
                 matched.set(record, candidate.entry.executor)
             }
-            for (const [key, used] of allocated) {
-                const existing = state.singleUsage.get(key)
-                state.singleUsage.set(key, {
-                    used: (existing?.used ?? 0) + used,
-                    expiresAt: now() + AUDIT_BUFFER_TTL_MS,
-                })
-            }
-            pruneUsage(state.singleUsage, now())
-            scheduleCleanup()
         }
+        pruneRecords(state, now())
+        if (matched.size) scheduleCleanup()
         return { matched, candidates, uncertainChannel }
     }
 
@@ -319,29 +282,29 @@ function createMessageDeletionLogger({
         for (const record of unresolved) {
             const candidates = observedCandidates.get(record) ?? []
             for (const candidate of candidates) {
-                const key = auditEntryKey(candidate.entry, 72)
-                const existing = state.singleUsage.get(key)
-                state.singleUsage.set(key, {
-                    used: Math.max(existing?.used ?? 0, candidate.count),
-                    expiresAt: now() + AUDIT_BUFFER_TTL_MS,
-                })
+                candidate.consumedSingles = Math.max(candidate.consumedSingles, candidate.count)
+                candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
             }
         }
-        pruneUsage(state.singleUsage, now())
+        pruneRecords(state, now())
         scheduleCleanup()
     }
 
     function mergeObservedCandidates(observed, candidates) {
         for (const [record, records] of candidates) {
             const current = observed.get(record) ?? []
-            const known = new Set(current.map((candidate) => auditEntryKey(candidate.entry, 72)))
-            observed.set(record, current.concat(records.filter((candidate) => !known.has(auditEntryKey(candidate.entry, 72)))))
+            const known = new Set(current.map((candidate) => candidate.key))
+            observed.set(record, current.concat(records.filter((candidate) => !known.has(candidate.key))))
         }
     }
 
-    async function logSingle(message, deletedBy) {
-        for (const embed of makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deletedBy })) {
-            await botLog(message.guild, embed, 1, 'messages')
+    async function attemptSingleDelivery(errors, message, deletedBy) {
+        try {
+            for (const embed of makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deletedBy })) {
+                await botLog(message.guild, embed, 1, 'messages')
+            }
+        } catch (error) {
+            errors.push(error)
         }
     }
 
@@ -372,24 +335,16 @@ function createMessageDeletionLogger({
         try {
             const deliveryErrors = []
             for (const [record, executor] of matched) {
-                try {
-                    await logSingle(record.message, executor)
-                } catch (error) {
-                    deliveryErrors.push(error)
-                }
+                await attemptSingleDelivery(deliveryErrors, record.message, executor)
             }
             quarantineUnresolvedSingles(guildId, observedCandidates, unresolved)
             for (const record of unresolved) {
                 const selfDelete = fetched
                     && !(resolution.candidates.get(record)?.length)
                     && !resolution.uncertainChannel.has(record)
-                    && (record.message?.channelId ?? record.message?.channel?.id)
+                    && messageChannelId(record.message)
                     && record.message?.author?.id
-                try {
-                    await logSingle(record.message, selfDelete ? 'self' : 'unavailable')
-                } catch (error) {
-                    deliveryErrors.push(error)
-                }
+                await attemptSingleDelivery(deliveryErrors, record.message, selfDelete ? 'self' : 'unavailable')
             }
             if (deliveryErrors.length) throw new AggregateError(deliveryErrors, 'Message deletion BotLog delivery failed.')
         } finally {
@@ -410,25 +365,18 @@ function createMessageDeletionLogger({
         return new Promise((resolve) => batch.records.push({ message, resolve }))
     }
 
-    function bulkCandidates(guildId, channelId, count) {
-        if (!channelId) return []
-        const state = stateForGuild(guildId)
-        return bufferedEntries(guildId, 73).filter((record) => (
+    function resolveBulk(guildId, channelId, count) {
+        const candidates = channelId ? bufferedEntries(guildId, 73).filter((record) => (
             record.entry?.executor?.id
             && sameId(bulkAuditChannelId(record.entry), channelId)
             && record.count === count
-            && !state.bulkUsage.has(auditEntryKey(record.entry, 73))
-        ))
-    }
-
-    function resolveBulk(guildId, channelId, count) {
-        const candidates = bulkCandidates(guildId, channelId, count)
+            && !record.bulkConsumed
+        )) : []
         if (new Set(candidates.map((record) => record.entry.executor.id)).size !== 1) return null
         const candidate = candidates.sort((left, right) => entryTimestamp(right.entry) - entryTimestamp(left.entry))[0]
-        stateForGuild(guildId).bulkUsage.set(auditEntryKey(candidate.entry, 73), {
-            expiresAt: now() + AUDIT_BUFFER_TTL_MS,
-        })
-        pruneUsage(stateForGuild(guildId).bulkUsage, now())
+        candidate.bulkConsumed = true
+        candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
+        pruneRecords(stateForGuild(guildId), now())
         scheduleCleanup()
         return candidate.entry.executor
     }
@@ -438,7 +386,7 @@ function createMessageDeletionLogger({
         if (!records.length) return
         const guild = channel?.guild ?? records[0]?.guild
         if (!guild?.id) return
-        const channelId = channel?.id ?? records[0]?.channelId ?? records[0]?.channel?.id
+        const channelId = channel?.id ?? messageChannelId(records[0])
         await wait(batchDelay)
         let executor = resolveBulk(guild.id, channelId, records.length)
         if (!executor) {
