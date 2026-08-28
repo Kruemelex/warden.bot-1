@@ -4,6 +4,7 @@ const RECONCILIATION_DELAY_MS = 1_500
 const AUDIT_RECONCILIATION_DELAYS_MS = [1_000, 2_000, 3_000, 3_000]
 const AUDIT_ENTRY_MAX_AGE_MS = 30_000
 const AUDIT_BUFFER_TTL_MS = 60_000
+const AUDIT_SUMMARY_TTL_MS = 10 * 60_000
 const AUDIT_BUFFER_MAX_ENTRIES = 320
 
 function sleep(milliseconds) {
@@ -157,9 +158,7 @@ function createMessageDeletionLogger({
         const currentTime = now()
         for (const [guildId, state] of guildStates) {
             pruneState(state, currentTime)
-            if (!state.records.size && !state.auditSnapshots.size && !state.auditUnits.length && !state.events.length && state.overflowUntil <= currentTime && !state.queue && !state.worker) {
-                guildStates.delete(guildId)
-            }
+            if (!state.records.size && !state.summaries.size && !state.events.length && !state.queue && !state.worker) guildStates.delete(guildId)
         }
         return guildStates.size
     }
@@ -176,9 +175,7 @@ function createMessageDeletionLogger({
 
     function stateForGuild(guildId) {
         const existing = guildStates.get(guildId)
-        const state = existing ?? {
-            records: new Map(), auditSnapshots: new Map(), auditUnits: [], events: [], overflowUntil: 0, order: 0, queue: null, worker: null,
-        }
+        const state = existing ?? { records: new Map(), summaries: new Map(), events: [], order: 0, queue: null, worker: null }
         guildStates.set(guildId, state)
         if (!existing) scheduleCleanup()
         pruneState(state, now())
@@ -188,51 +185,49 @@ function createMessageDeletionLogger({
     function pruneState(state, currentTime) {
         for (const [key, record] of state.records) if (record.expiresAt <= currentTime) state.records.delete(key)
         const recent = [...state.records.entries()].sort(([, left], [, right]) => (
-            right.expiresAt - left.expiresAt || entryTimestamp(right.entry) - entryTimestamp(left.entry)
-        ))
+            right.expiresAt - left.expiresAt || entryTimestamp(right.entry) - entryTimestamp(left.entry)))
         for (const [key] of recent.slice(AUDIT_BUFFER_MAX_ENTRIES)) state.records.delete(key)
-        for (const [key, snapshot] of state.auditSnapshots) if (snapshot.expiresAt <= currentTime) state.auditSnapshots.delete(key)
-        const snapshots = [...state.auditSnapshots.entries()].sort(([, left], [, right]) => (
-            right.expiresAt - left.expiresAt || right.order - left.order
-        ))
-        for (const [key] of snapshots.slice(AUDIT_BUFFER_MAX_ENTRIES)) state.auditSnapshots.delete(key)
-        state.auditUnits = state.auditUnits.filter((unit) => unit.expiresAt > currentTime)
-            .sort((left, right) => right.expiresAt - left.expiresAt || right.order - left.order)
-            .slice(0, AUDIT_BUFFER_MAX_ENTRIES)
-        if (state.overflowUntil <= currentTime) state.overflowUntil = 0
-        const events = state.events.filter((event) => event.expiresAt > currentTime)
-            .sort((left, right) => left.order - right.order)
-        const active = events.filter((event) => !event.delivered)
-        const delivered = events.filter((event) => event.delivered)
-        const dropped = delivered.slice(0, Math.max(0, delivered.length - AUDIT_BUFFER_MAX_ENTRIES))
-        for (const event of dropped) if (event.tombstone) state.overflowUntil = Math.max(state.overflowUntil, event.expiresAt)
-        state.events = [...active, ...delivered.slice(-AUDIT_BUFFER_MAX_ENTRIES)].sort((left, right) => left.order - right.order)
+        for (const [key, summary] of state.summaries) if (summary.expiresAt <= currentTime) state.summaries.delete(key)
+        while (state.summaries.size > AUDIT_BUFFER_MAX_ENTRIES) state.summaries.delete(state.summaries.keys().next().value)
+        for (const summary of state.summaries.values()) summary.segments = summary.segments
+            .filter((segment) => segment.remaining > 0).slice(-AUDIT_BUFFER_MAX_ENTRIES)
     }
 
-    function mergeAuditUnits(state, entries, currentTime) {
+    function mergeSummaries(state, entries, currentTime) {
         for (const entry of entries) {
             if (!auditExecutorId(entry)) continue
             const key = auditEntryKey(entry, 72)
-            const snapshot = state.auditSnapshots.get(key) ?? { count: 0 }
-            const count = Math.max(snapshot.count, auditCount(entry))
-            for (let index = snapshot.count; index < count; index += 1) {
-                state.auditUnits.push({
-                    key, executor: entry.executor ?? { id: auditExecutorId(entry) }, targetId: auditTargetId(entry),
-                    channelId: auditChannelId(entry), entryTimestamp: entryTimestamp(entry),
-                    order: ++state.order, consumed: false, expiresAt: currentTime + AUDIT_BUFFER_TTL_MS,
+            const count = auditCount(entry)
+            let summary = state.summaries.get(key)
+            if (!summary) {
+                summary = {
+                    executor: entry.executor ?? { id: auditExecutorId(entry) },
+                    targetId: auditTargetId(entry), channelId: auditChannelId(entry),
+                    highWaterCount: count, segments: [],
+                }
+                if (isRecent(entry, currentTime)) summary.segments.push({
+                    remaining: count, observedAt: entryTimestamp(entry),
                 })
+                state.summaries.set(key, summary)
+            } else if (count > summary.highWaterCount) {
+                summary.segments.push({
+                    remaining: count - summary.highWaterCount, observedAt: currentTime,
+                })
+                summary.highWaterCount = count
+                summary.executor = entry.executor ?? { id: auditExecutorId(entry) }
+                summary.targetId = auditTargetId(entry)
+                summary.channelId = auditChannelId(entry)
             }
-            snapshot.count = count
-            snapshot.order = state.order
-            snapshot.expiresAt = currentTime + AUDIT_BUFFER_TTL_MS
-            state.auditSnapshots.set(key, snapshot)
+            summary.expiresAt = currentTime + AUDIT_SUMMARY_TTL_MS
+            state.summaries.delete(key)
+            state.summaries.set(key, summary)
         }
     }
 
     function mergeEntries(state, type, entries, preferCurrent = false) {
         const currentTime = now()
         if (type === 72) {
-            mergeAuditUnits(state, entries, currentTime)
+            mergeSummaries(state, entries, currentTime)
             pruneState(state, currentTime)
             scheduleCleanup()
             return
@@ -241,9 +236,7 @@ function createMessageDeletionLogger({
             if (!entry?.executor?.id) continue
             const key = auditEntryKey(entry, type)
             const existing = state.records.get(key)
-            const record = existing ?? {
-                key, type, bulkConsumed: false,
-            }
+            const record = existing ?? { bulkConsumed: false }
             record.entry = preferCurrent || !existing || entryTimestamp(entry) >= entryTimestamp(existing.entry)
                 ? entry : existing.entry
             record.count = Math.max(record.count ?? 0, auditCount(entry))
@@ -254,67 +247,76 @@ function createMessageDeletionLogger({
         scheduleCleanup()
     }
 
-    function bufferedEntries(state, type) {
-        return [...state.records.values()]
-            .filter((record) => record.type === type && isRecent(record.entry, now()))
-    }
-
     async function fetchEntries(guild, state, type) {
         const logs = await guild.fetchAuditLogs({ type, limit: 20 })
         mergeEntries(state, type, collectionValues(logs?.entries), true)
     }
 
-    function exactCandidates(state, event) {
-        return state.auditUnits.filter((unit) => (
-            !unit.consumed
-            && sameId(unit.targetId, event.authorId)
-            && sameId(unit.channelId, event.channelId)
-            && Math.abs(unit.entryTimestamp - event.createdAt) <= AUDIT_ENTRY_MAX_AGE_MS
-        )).sort((left, right) => left.order - right.order)
-    }
-
-    function barrierCount(state, event, candidates) {
-        if (!candidates.length) return 0
-        const timestamps = candidates.map((unit) => unit.entryTimestamp)
-        const earliest = Math.min(...timestamps)
-        const latest = Math.max(...timestamps)
-        return state.events.filter((barrier) => (
-            barrier.tombstone && barrier.order < event.order && barrier.channelId
-            && sameId(barrier.channelId, event.channelId)
-            && (!barrier.authorId || sameId(barrier.authorId, event.authorId))
-            && barrier.createdAt >= earliest - AUDIT_ENTRY_MAX_AGE_MS
-            && barrier.createdAt <= latest + AUDIT_ENTRY_MAX_AGE_MS
-        )).length
+    function allocationFor(summaries, events) {
+        const segments = summaries.flatMap((summary) => summary.segments)
+            .filter((segment) => segment.remaining > 0)
+            .sort((left, right) => left.observedAt - right.observedAt)
+        const used = new Map()
+        for (const event of events) {
+            const candidate = segments.find((segment) => (
+                segment.remaining - (used.get(segment) ?? 0) > 0
+                && Math.abs(segment.observedAt - event.createdAt) <= AUDIT_ENTRY_MAX_AGE_MS
+            ))
+            if (!candidate) return null
+            used.set(candidate, (used.get(candidate) ?? 0) + 1)
+        }
+        return used
     }
 
     function reconcileEvents(state) {
-        if (state.overflowUntil > now()) return
         const groups = new Map()
         for (const event of state.events) {
-            if (event.delivered || event.executor || !event.authorId || !event.channelId) continue
+            if (event.executor) continue
             const key = `${event.authorId}\0${event.channelId}`
-            const group = groups.get(key) ?? []
-            group.push(event)
-            groups.set(key, group)
+            groups.set(key, [...(groups.get(key) ?? []), event])
         }
         for (const events of groups.values()) {
             const ordered = [...events].sort((left, right) => left.order - right.order)
-            const candidates = exactCandidates(state, ordered[0]).filter((unit) => (
-                ordered.every((event) => Math.abs(unit.entryTimestamp - event.createdAt) <= AUDIT_ENTRY_MAX_AGE_MS)
-            ))
-            const barriers = barrierCount(state, ordered[0], candidates)
-            if (candidates.length - barriers < ordered.length) continue
-            const executors = new Set(candidates.map((unit) => unit.executor?.id).filter(Boolean))
-            if (executors.size !== 1) {
-                for (const unit of candidates) unit.consumed = true
+            const byExecutor = new Map()
+            for (const summary of state.summaries.values()) {
+                if (!sameId(summary.targetId, ordered[0].authorId) || !sameId(summary.channelId, ordered[0].channelId)) continue
+                if (!summary.segments.some((segment) => segment.remaining > 0
+                    && ordered.some((event) => Math.abs(segment.observedAt - event.createdAt) <= AUDIT_ENTRY_MAX_AGE_MS))) continue
+                const executorId = summary.executor?.id
+                if (!executorId) continue
+                byExecutor.set(executorId, [...(byExecutor.get(executorId) ?? []), summary])
+            }
+            if (byExecutor.size > 1) {
+                quarantineEligibleCapacity(state, ordered)
                 continue
             }
-            for (const [index, event] of ordered.entries()) {
-                const unit = candidates[barriers + index]
-                unit.consumed = true
-                event.executor = unit.executor
+            const summaries = byExecutor.values().next().value
+            if (!summaries) continue
+            const allocation = allocationFor(summaries, ordered)
+            if (!allocation) continue
+            for (const [segment, count] of allocation) segment.remaining -= count
+            const executor = summaries[0].executor
+            for (const event of ordered) event.executor = executor
+        }
+    }
+
+    function quarantineEligibleCapacity(state, events) {
+        const signatures = new Map()
+        for (const event of events) {
+            if (event.executor) continue
+            const key = `${event.authorId}\0${event.channelId}`
+            signatures.set(key, [...(signatures.get(key) ?? []), event])
+        }
+        for (const eventsForSignature of signatures.values()) {
+            for (const summary of state.summaries.values()) {
+                if (!sameId(summary.targetId, eventsForSignature[0].authorId)
+                    || !sameId(summary.channelId, eventsForSignature[0].channelId)) continue
+                for (const segment of summary.segments) {
+                    if (eventsForSignature.some((event) => Math.abs(segment.observedAt - event.createdAt) <= AUDIT_ENTRY_MAX_AGE_MS)) segment.remaining = 0
+                }
             }
         }
+        pruneState(state, now())
     }
 
     async function attemptSingleDelivery(errors, record, deletedBy) {
@@ -332,91 +334,69 @@ function createMessageDeletionLogger({
         const fetchErrors = []
         let fetchedAuditRecords = false
         let unresolved = queue.events.filter((event) => !event.executor)
-        if (unresolved.length) {
+        for (const delay of [0, ...reconciliationDelays]) {
+            if (!unresolved.length) break
+            if (delay) {
+                await wait(delay)
+                reconcileEvents(state)
+                unresolved = queue.events.filter((event) => !event.executor)
+                if (!unresolved.length) break
+            }
             try {
                 await fetchEntries(queue.guild, state, 72)
                 fetchedAuditRecords = true
                 reconcileEvents(state)
                 unresolved = queue.events.filter((event) => !event.executor)
-            } catch (error) {
-                fetchErrors.push(error)
-            }
+            } catch (error) { fetchErrors.push(error) }
         }
-        for (const delay of reconciliationDelays) {
-            if (!unresolved.length) break
-            await wait(delay)
-            reconcileEvents(state)
-            unresolved = queue.events.filter((event) => !event.executor)
-            if (!unresolved.length) break
-            try {
-                await fetchEntries(queue.guild, state, 72)
-                fetchedAuditRecords = true
-                reconcileEvents(state)
-                unresolved = queue.events.filter((event) => !event.executor)
-            } catch (error) {
-                fetchErrors.push(error)
-            }
-        }
-        if (fetchErrors.length && !fetchedAuditRecords) {
-            console.error('Message deletion audit reconciliation failed after bounded retries:', fetchErrors.at(-1))
-        }
+        if (fetchErrors.length && !fetchedAuditRecords) console.error(
+            'Message deletion audit reconciliation failed after bounded retries:', fetchErrors.at(-1),
+        )
+        quarantineEligibleCapacity(state, queue.events)
         try {
             const deliveryErrors = []
             for (const event of queue.events) {
                 await attemptSingleDelivery(deliveryErrors, event, event.executor ?? 'unavailable')
-                event.delivered = true
-                event.tombstone = !event.executor
             }
             if (deliveryErrors.length) throw new AggregateError(deliveryErrors, 'Message deletion BotLog delivery failed.')
         } finally {
+            const delivered = new Set(queue.events)
+            state.events = state.events.filter((event) => !delivered.has(event))
             for (const event of queue.events) event.resolve()
         }
     }
 
-    function createDeletionEvent(state, message, resolve) {
-        const currentTime = now()
-        const event = {
-            message, resolve, authorId: message?.author?.id, channelId: messageChannelId(message),
-            order: ++state.order, createdAt: currentTime, expiresAt: currentTime + AUDIT_BUFFER_TTL_MS,
-            delivered: false, tombstone: false, executor: null,
-        }
-        state.events.push(event)
-        pruneState(state, currentTime)
-        scheduleCleanup()
-        return event
-    }
-
-    async function deliverUnavailableEvent(event) {
-        event.tombstone = true
+    async function deliverUnavailableMessage(message) {
         try {
             const errors = []
-            await attemptSingleDelivery(errors, event, 'unavailable')
+            await attemptSingleDelivery(errors, { message }, 'unavailable')
             if (errors.length) throw new AggregateError(errors, 'Message deletion BotLog delivery failed.')
         } catch (error) {
             console.error('Message deletion logging failed:', error)
         }
-        event.delivered = true
-        event.resolve()
     }
 
     function recordSingleDeletion(message) {
         const guild = message?.guild
         if (!guild?.id) return Promise.resolve()
-        const state = stateForGuild(guild.id)
         if (!message?.author?.id || !messageChannelId(message)) {
-            let resolve
-            const result = new Promise((done) => { resolve = done })
-            const event = createDeletionEvent(state, message, resolve)
-            void deliverUnavailableEvent(event)
-            return result
+            return deliverUnavailableMessage(message)
         }
+        const state = stateForGuild(guild.id)
         let queue = state.queue
         if (!queue) {
             queue = { guild, events: [], readyAt: now() + batchDelay }
             state.queue = queue
             startSingleWorker(guild.id, state)
         }
-        return new Promise((resolve) => queue.events.push(createDeletionEvent(state, message, resolve)))
+        return new Promise((resolve) => {
+            const event = {
+                message, resolve, authorId: message.author.id, channelId: messageChannelId(message),
+                order: ++state.order, createdAt: now(), executor: null,
+            }
+            state.events.push(event)
+            queue.events.push(event)
+        })
     }
 
     function startSingleWorker(guildId, state) {
@@ -438,8 +418,8 @@ function createMessageDeletionLogger({
     }
 
     function resolveBulk(state, channelId, count) {
-        const candidates = channelId ? bufferedEntries(state, 73).filter((record) => (
-            record.entry?.executor?.id
+        const candidates = channelId ? [...state.records.values()].filter((record) => (
+            isRecent(record.entry, now()) && record.entry?.executor?.id
             && sameId(bulkAuditChannelId(record.entry), channelId)
             && record.count === count
             && !record.bulkConsumed
