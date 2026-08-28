@@ -680,7 +680,6 @@ const thisBotFunctions = {
                 }
                 return channel.send({
                     embeds: [embed],
-                    allowedMentions: { parse: [] },
                     ...(deliveryOptions.files ? { files: deliveryOptions.files } : {}),
                     ...(deliveryOptions.nonce ? { nonce: deliveryOptions.nonce } : {}),
                     ...(deliveryOptions.enforceNonce === true ? { enforceNonce: true } : {}),
