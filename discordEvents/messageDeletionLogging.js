@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 
 const RECONCILIATION_DELAY_MS = 1_500
+const AUDIT_RECONCILIATION_DELAYS_MS = [1_000, 2_000, 3_000, 3_000]
 const AUDIT_ENTRY_MAX_AGE_MS = 30_000
 const AUDIT_BUFFER_TTL_MS = 60_000
 const AUDIT_BUFFER_MAX_ENTRIES = 320
@@ -32,6 +33,19 @@ function auditChannelId(entry) {
         ?? null
 }
 
+function auditTargetId(entry) {
+    return entry?.target?.id ?? entry?.targetId ?? entry?.target_id ?? null
+}
+
+function auditExecutorId(entry) {
+    return entry?.executor?.id ?? entry?.executorId ?? entry?.executor_id ?? null
+}
+
+function auditExecutor(entry) {
+    const id = auditExecutorId(entry)
+    return id == null ? null : entry?.executor?.id ? entry.executor : { id }
+}
+
 function bulkAuditChannelId(entry) {
     return entry?.target?.id ?? auditChannelId(entry)
 }
@@ -47,7 +61,7 @@ function entryTimestamp(entry) {
 
 function auditEntryKey(entry, type) {
     const channelId = type === 73 ? bulkAuditChannelId(entry) : auditChannelId(entry)
-    return `${type}:${String(entry?.id ?? `${entry?.executor?.id ?? ''}:${entryTimestamp(entry)}:${entry?.target?.id ?? ''}:${channelId ?? ''}`)}`
+    return `${type}:${String(entry?.id ?? `${auditExecutorId(entry) ?? ''}:${entryTimestamp(entry)}:${auditTargetId(entry) ?? ''}:${channelId ?? ''}`)}`
 }
 
 function isValidMessageTimestamp(timestamp) {
@@ -141,9 +155,7 @@ function makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deleted
     const iconURL = avatarSource?.displayAvatarURL({ dynamic: true })
     const actor = deletedBy?.id
         ? `<@${deletedBy.id}>`
-        : deletedBy === 'self'
-            ? 'self-delete (or record unavailable)'
-            : 'record unavailable'
+        : 'record unavailable'
     const createdTimestamp = messageCreatedTimestamp(message)
     return buildCopyableMessageEmbeds({
         title: 'Message Deleted 🗑️',
@@ -173,6 +185,7 @@ function createMessageDeletionLogger({
     discord = Discord,
     wait = sleep,
     batchDelay = RECONCILIATION_DELAY_MS,
+    reconciliationDelays = AUDIT_RECONCILIATION_DELAYS_MS,
     now = Date.now,
     setCleanupTimer = setTimeout,
 } = {}) {
@@ -180,14 +193,15 @@ function createMessageDeletionLogger({
     if (typeof buildCopyableMessageEmbeds !== 'function') throw new Error('A message embed builder is required.')
 
     const guildStates = new Map()
-    const pendingSingles = new Map()
+    const singleQueues = new Map()
+    const singleWorkers = new Map()
     let cleanupTimer = null
 
     function sweepExpiredState() {
         const currentTime = now()
         for (const [guildId, state] of guildStates) {
             pruneRecords(state, currentTime)
-            if (!state.records.size && !pendingSingles.has(guildId)) {
+            if (!state.records.size && !singleQueues.has(guildId)) {
                 guildStates.delete(guildId)
             }
         }
@@ -225,11 +239,11 @@ function createMessageDeletionLogger({
         const state = stateForGuild(guildId)
         const currentTime = now()
         for (const entry of entries) {
-            if (!entry?.executor?.id) continue
+            if (!(type === 73 ? entry?.executor?.id : auditExecutorId(entry))) continue
             const key = auditEntryKey(entry, type)
             const existing = state.records.get(key)
             const record = existing ?? {
-                key, type, consumedSingles: 0, bulkConsumed: false,
+                key, type, consumedSingles: 0, closedForSingles: false, bulkConsumed: false,
             }
             record.entry = preferCurrent || !existing || entryTimestamp(entry) >= entryTimestamp(existing.entry)
                 ? entry : existing.entry
@@ -257,16 +271,15 @@ function createMessageDeletionLogger({
         const channelId = messageChannelId(message)
         if (!authorId || !channelId) return []
         return records.filter((record) => (
-            record.entry?.executor?.id
-            && sameId(record.entry?.target?.id, authorId)
+            auditExecutorId(record.entry)
+            && sameId(auditTargetId(record.entry), authorId)
             && sameId(auditChannelId(record.entry), channelId)
         ))
     }
 
-    function resolveSingles(guildId, pending) {
+    function resolveSingleBatch(guildId, pending) {
         const state = stateForGuild(guildId)
         const candidates = new Map()
-        const uncertainChannel = new Set()
         const matched = new Map()
         const groups = new Map()
         const records = bufferedEntries(guildId, 72)
@@ -274,15 +287,10 @@ function createMessageDeletionLogger({
         for (const pendingRecord of pending) {
             const matches = candidatesForMessage(records, pendingRecord.message)
             candidates.set(pendingRecord, matches)
+            const openMatches = matches.filter((record) => !record.closedForSingles)
             const channelId = messageChannelId(pendingRecord.message)
-            if (channelId) {
-                const authorId = pendingRecord.message?.author?.id
-                if (records.some((record) => sameId(record.entry?.target?.id, authorId) && !auditChannelId(record.entry))) {
-                    uncertainChannel.add(pendingRecord)
-                }
-            }
-            if (!matches.length || new Set(matches.map((record) => record.entry.executor.id)).size > 1) continue
-            const key = `${pendingRecord.message.author.id}\0${channelId}\0${matches[0].entry.executor.id}`
+            if (!openMatches.length || new Set(openMatches.map((record) => auditExecutorId(record.entry))).size > 1) continue
+            const key = `${pendingRecord.message.author.id}\0${channelId}\0${auditExecutorId(openMatches[0].entry)}`
             const group = groups.get(key) ?? []
             group.push(pendingRecord)
             groups.set(key, group)
@@ -291,26 +299,29 @@ function createMessageDeletionLogger({
             const common = candidates.get(group[0]).filter((candidate) => group.every((record) => (
                 candidates.get(record).some((other) => other.key === candidate.key)
             )))
-            const available = common.reduce((total, candidate) => total + Math.max(0, candidate.count - candidate.consumedSingles), 0)
+            const eligible = common.filter((candidate) => !candidate.closedForSingles
+                && candidate.consumedSingles < candidate.count)
+            const available = eligible.reduce((total, candidate) => total + candidate.count - candidate.consumedSingles, 0)
             if (available < group.length) continue
             for (const record of group) {
-                const candidate = common.find((entry) => entry.consumedSingles < entry.count)
+                const candidate = eligible.find((entry) => entry.consumedSingles < entry.count)
                 candidate.consumedSingles += 1
                 candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
-                matched.set(record, candidate.entry.executor)
+                matched.set(record, auditExecutor(candidate.entry))
             }
         }
         pruneRecords(state, now())
         if (matched.size) scheduleCleanup()
-        return { matched, candidates, uncertainChannel }
+        return { matched, candidates }
     }
 
-    function quarantineUnresolvedSingles(guildId, observedCandidates, unresolved) {
+    function closeUnresolvedSingles(guildId, observedCandidates, unresolved) {
         const state = stateForGuild(guildId)
         for (const record of unresolved) {
             const candidates = observedCandidates.get(record) ?? []
             for (const candidate of candidates) {
                 candidate.consumedSingles = Math.max(candidate.consumedSingles, candidate.count)
+                candidate.closedForSingles = true
                 candidate.expiresAt = now() + AUDIT_BUFFER_TTL_MS
             }
         }
@@ -326,6 +337,13 @@ function createMessageDeletionLogger({
         }
     }
 
+    function applySingleResolution(guildId, pending, observedCandidates, matched) {
+        const resolution = resolveSingleBatch(guildId, pending)
+        mergeObservedCandidates(observedCandidates, resolution.candidates)
+        for (const [record, executor] of resolution.matched) matched.set(record, executor)
+        return pending.filter((record) => !matched.has(record))
+    }
+
     async function attemptSingleDelivery(errors, message, deletedBy) {
         try {
             for (const embed of makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deletedBy })) {
@@ -336,43 +354,40 @@ function createMessageDeletionLogger({
         }
     }
 
-    async function flushSingles(guildId) {
-        const batch = pendingSingles.get(guildId)
-        if (!batch) return
-        pendingSingles.delete(guildId)
-        const pending = [...batch.records]
-        let resolution = resolveSingles(guildId, pending)
-        const observedCandidates = new Map(resolution.candidates)
-        const matched = new Map(resolution.matched)
-        let unresolved = pending.filter((record) => !resolution.matched.has(record))
-        let fetched = false
-        let fetchError
-        if (unresolved.length) {
+    async function reconcileSingleQueue(guildId) {
+        const queue = singleQueues.get(guildId)
+        if (!queue?.readyForReconciliation) return
+        singleQueues.delete(guildId)
+        const pending = [...queue.records]
+        const observedCandidates = new Map()
+        const matched = new Map()
+        let unresolved = applySingleResolution(guildId, pending, observedCandidates, matched)
+        const fetchErrors = []
+        let fetchedAuditRecords = false
+        for (const delay of reconciliationDelays) {
+            if (!unresolved.length) break
+            await wait(delay)
+            unresolved = applySingleResolution(guildId, unresolved, observedCandidates, matched)
+            if (!unresolved.length) break
             try {
-                await fetchEntries(batch.guild, 72)
-                fetched = true
-                resolution = resolveSingles(guildId, unresolved)
-                mergeObservedCandidates(observedCandidates, resolution.candidates)
-                for (const [record, executor] of resolution.matched) matched.set(record, executor)
-                unresolved = unresolved.filter((record) => !resolution.matched.has(record))
+                await fetchEntries(queue.guild, 72)
+                fetchedAuditRecords = true
+                unresolved = applySingleResolution(guildId, unresolved, observedCandidates, matched)
             } catch (error) {
-                fetchError = error
+                fetchErrors.push(error)
             }
         }
-        if (fetchError) console.error('Message deletion audit reconciliation failed:', fetchError)
+        if (fetchErrors.length && !fetchedAuditRecords) {
+            console.error('Message deletion audit reconciliation failed after bounded retries:', fetchErrors.at(-1))
+        }
         try {
             const deliveryErrors = []
             for (const [record, executor] of matched) {
                 await attemptSingleDelivery(deliveryErrors, record.message, executor)
             }
-            quarantineUnresolvedSingles(guildId, observedCandidates, unresolved)
+            closeUnresolvedSingles(guildId, observedCandidates, unresolved)
             for (const record of unresolved) {
-                const selfDelete = fetched
-                    && !(resolution.candidates.get(record)?.length)
-                    && !resolution.uncertainChannel.has(record)
-                    && messageChannelId(record.message)
-                    && record.message?.author?.id
-                await attemptSingleDelivery(deliveryErrors, record.message, selfDelete ? 'self' : 'unavailable')
+                await attemptSingleDelivery(deliveryErrors, record.message, 'unavailable')
             }
             if (deliveryErrors.length) throw new AggregateError(deliveryErrors, 'Message deletion BotLog delivery failed.')
         } finally {
@@ -383,14 +398,29 @@ function createMessageDeletionLogger({
     function recordSingleDeletion(message) {
         const guild = message?.guild
         if (!guild?.id) return Promise.resolve()
-        let batch = pendingSingles.get(guild.id)
-        if (!batch) {
-            batch = { guild, records: [] }
-            pendingSingles.set(guild.id, batch)
-            Promise.resolve().then(() => wait(batchDelay)).then(() => flushSingles(guild.id))
+        let queue = singleQueues.get(guild.id)
+        if (!queue) {
+            queue = { guild, records: [], readyForReconciliation: false }
+            singleQueues.set(guild.id, queue)
+            Promise.resolve().then(() => wait(batchDelay)).then(() => {
+                queue.readyForReconciliation = true
+                startSingleQueueWorker(guild.id)
+            })
                 .catch((error) => console.error('Message deletion logging failed:', error))
         }
-        return new Promise((resolve) => batch.records.push({ message, resolve }))
+        return new Promise((resolve) => queue.records.push({ message, resolve }))
+    }
+
+    function startSingleQueueWorker(guildId) {
+        if (singleWorkers.has(guildId)) return
+        const worker = (async () => {
+            while (singleQueues.get(guildId)?.readyForReconciliation) await reconcileSingleQueue(guildId)
+        })()
+        singleWorkers.set(guildId, worker)
+        worker.catch((error) => console.error('Message deletion logging failed:', error)).finally(() => {
+            singleWorkers.delete(guildId)
+            if (singleQueues.get(guildId)?.readyForReconciliation) startSingleQueueWorker(guildId)
+        })
     }
 
     function resolveBulk(guildId, channelId, count) {

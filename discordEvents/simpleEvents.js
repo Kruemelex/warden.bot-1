@@ -29,7 +29,7 @@ function buildCopyableMessageEmbeds({
     const normalizedContent = neutralizeCodeFences(content)
     const codeBlockOverhead = wrapCodeBlock('').length
     const messageLinkFooter = messageLink ? `\n\n**Message Link:** ${messageLink}` : ''
-    const contentFooterText = contentFooter ? `\n\n${contentFooter}` : ''
+    const contentFooterText = contentFooter ? `\n${contentFooter}` : ''
     const finalFooter = `${messageLinkFooter}${contentFooterText}`
 
     function buildChunks(totalPages) {
