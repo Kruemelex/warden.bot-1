@@ -1010,6 +1010,7 @@ const exp = {
             } 
         }
     },
+    guildAuditLogEntryCreate: async (auditLogEntry, guild) => messageDeletionLogger.recordAuditEntry(auditLogEntry, guild),
     messageDelete: async (message) => messageDeletionLogger.recordSingleDeletion(message),
     messageDeleteBulk: async (messages, channel) => messageDeletionLogger.recordBulkDeletion(messages, channel),
     messageUpdate: async (oldMessage, newMessage, bot) => {
