@@ -1,11 +1,12 @@
 const Discord = require('discord.js')
 
 const RECONCILIATION_DELAY_MS = 1_500
-const AUDIT_RECONCILIATION_DELAYS_MS = [1_000, 2_000, 3_000, 3_000]
+const AUDIT_RECONCILIATION_DELAYS_MS = [500, 1_000, 1_500]
 const AUDIT_ENTRY_MAX_AGE_MS = 30_000
 const AUDIT_BUFFER_TTL_MS = 60_000
 const AUDIT_SUMMARY_TTL_MS = 10 * 60_000
 const AUDIT_BUFFER_MAX_ENTRIES = 320
+const SELF_DELETE = Symbol('self-delete')
 
 function sleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -116,9 +117,12 @@ function makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deleted
         timestamp == null ? null : `Created at: <t:${Math.floor(timestamp / 1000)}:F>`,
         `Channel: ${channelId ? `<#${channelId}>` : 'record unavailable'}`,
     ].filter(Boolean).join('\n')
+    const deletedByText = deletedBy === SELF_DELETE
+        ? 'self-delete (or record unavailable)'
+        : deletedBy?.id ? `<@${deletedBy.id}>` : 'record unavailable'
     return buildCopyableMessageEmbeds({
         title: 'Message Deleted 🗑️',
-        searchableText: `Deleted by: ${deletedBy?.id ? `<@${deletedBy.id}>` : 'record unavailable'}\nMessage Author: ${author?.id ? `<@${author.id}>` : 'record unavailable'}`,
+        searchableText: `Deleted by: ${deletedByText}\nMessage Author: ${author?.id ? `<@${author.id}>` : 'record unavailable'}`,
         contentLabel: 'Message', content: message?.content != null ? message.content : 'Cache Empty',
         contentFooter,
         author: iconURL ? { name, iconURL } : { name },
@@ -195,14 +199,11 @@ function createMessageDeletionLogger({
 
     function mergeSummaries(state, entries, currentTime) {
         for (const entry of entries) {
-            if (!auditExecutorId(entry)) continue
             const key = auditEntryKey(entry, 72)
             const count = auditCount(entry)
             let summary = state.summaries.get(key)
             if (!summary) {
                 summary = {
-                    executor: entry.executor ?? { id: auditExecutorId(entry) },
-                    targetId: auditTargetId(entry), channelId: auditChannelId(entry),
                     highWaterCount: count, segments: [],
                 }
                 if (isRecent(entry, currentTime)) summary.segments.push({
@@ -214,10 +215,16 @@ function createMessageDeletionLogger({
                     remaining: count - summary.highWaterCount, observedAt: currentTime,
                 })
                 summary.highWaterCount = count
-                summary.executor = entry.executor ?? { id: auditExecutorId(entry) }
-                summary.targetId = auditTargetId(entry)
-                summary.channelId = auditChannelId(entry)
             }
+            const executorId = auditExecutorId(entry)
+            const targetId = auditTargetId(entry)
+            const channelId = auditChannelId(entry)
+            if (executorId) summary.executor = entry.executor ?? { id: executorId }
+            else if (!Object.hasOwn(summary, 'executor')) summary.executor = null
+            if (targetId != null) summary.targetId = targetId
+            else if (!Object.hasOwn(summary, 'targetId')) summary.targetId = null
+            if (channelId != null) summary.channelId = channelId
+            else if (!Object.hasOwn(summary, 'channelId')) summary.channelId = null
             summary.expiresAt = currentTime + AUDIT_SUMMARY_TTL_MS
             state.summaries.delete(key)
             state.summaries.set(key, summary)
@@ -280,6 +287,7 @@ function createMessageDeletionLogger({
             const byExecutor = new Map()
             for (const summary of state.summaries.values()) {
                 if (!sameId(summary.targetId, ordered[0].authorId) || !sameId(summary.channelId, ordered[0].channelId)) continue
+                for (const event of ordered) event.matchingEvidence = true
                 if (!summary.segments.some((segment) => segment.remaining > 0
                     && ordered.some((event) => Math.abs(segment.observedAt - event.createdAt) <= AUDIT_ENTRY_MAX_AGE_MS))) continue
                 const executorId = summary.executor?.id
@@ -287,6 +295,7 @@ function createMessageDeletionLogger({
                 byExecutor.set(executorId, [...(byExecutor.get(executorId) ?? []), summary])
             }
             if (byExecutor.size > 1) {
+                for (const event of ordered) event.executorAmbiguity = true
                 quarantineEligibleCapacity(state, ordered)
                 continue
             }
@@ -347,7 +356,10 @@ function createMessageDeletionLogger({
                 fetchedAuditRecords = true
                 reconcileEvents(state)
                 unresolved = queue.events.filter((event) => !event.executor)
-            } catch (error) { fetchErrors.push(error) }
+            } catch (error) {
+                fetchErrors.push(error)
+                for (const event of state.events) if (!event.executor) event.fetchFailed = true
+            }
         }
         if (fetchErrors.length && !fetchedAuditRecords) console.error(
             'Message deletion audit reconciliation failed after bounded retries:', fetchErrors.at(-1),
@@ -356,7 +368,9 @@ function createMessageDeletionLogger({
         try {
             const deliveryErrors = []
             for (const event of queue.events) {
-                await attemptSingleDelivery(deliveryErrors, event, event.executor ?? 'unavailable')
+                const deletedBy = event.executor ?? (!event.fetchFailed && !event.matchingEvidence && !event.executorAmbiguity
+                    ? SELF_DELETE : 'unavailable')
+                await attemptSingleDelivery(deliveryErrors, event, deletedBy)
             }
             if (deliveryErrors.length) throw new AggregateError(deliveryErrors, 'Message deletion BotLog delivery failed.')
         } finally {
@@ -393,6 +407,7 @@ function createMessageDeletionLogger({
             const event = {
                 message, resolve, authorId: message.author.id, channelId: messageChannelId(message),
                 order: ++state.order, createdAt: now(), executor: null,
+                matchingEvidence: false, executorAmbiguity: false, fetchFailed: false,
             }
             state.events.push(event)
             queue.events.push(event)
