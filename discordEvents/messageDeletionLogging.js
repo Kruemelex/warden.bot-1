@@ -5,6 +5,9 @@ const AUDIT_ENTRY_MAX_AGE_MS = 30_000
 const AUDIT_BUFFER_TTL_MS = 60_000
 const AUDIT_BUFFER_MAX_ENTRIES = 320
 const DISCORD_EPOCH = 1_420_070_400_000n
+const MAX_DISCORD_SNOWFLAKE = (1n << 64n) - 1n
+const MAX_MESSAGE_TIMESTAMP = Number((MAX_DISCORD_SNOWFLAKE >> 22n) + DISCORD_EPOCH)
+const INVALID_MESSAGE_TIMESTAMP = Number.MAX_SAFE_INTEGER
 
 function sleep(milliseconds) {
     return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -47,20 +50,43 @@ function auditEntryKey(entry, type) {
     return `${type}:${String(entry?.id ?? `${entry?.executor?.id ?? ''}:${entryTimestamp(entry)}:${entry?.target?.id ?? ''}:${channelId ?? ''}`)}`
 }
 
-function messageTimestamp(message) {
-    if (Number.isFinite(message?.createdTimestamp)) return Number(message.createdTimestamp)
-    const createdAt = message?.createdAt?.getTime?.()
-    if (Number.isFinite(createdAt)) return createdAt
+function isValidMessageTimestamp(timestamp) {
+    return Number.isSafeInteger(timestamp)
+        && timestamp >= Number(DISCORD_EPOCH)
+        && timestamp <= MAX_MESSAGE_TIMESTAMP
+}
+
+function snowflakeTimestamp(id) {
+    if (typeof id !== 'string' && typeof id !== 'bigint') return null
+    const text = String(id)
+    if (!/^[1-9]\d*$/u.test(text)) return null
     try {
-        return Number((BigInt(message?.id) >> 22n) + DISCORD_EPOCH)
+        const snowflake = BigInt(text)
+        if (snowflake > MAX_DISCORD_SNOWFLAKE) return null
+        const timestamp = Number((snowflake >> 22n) + DISCORD_EPOCH)
+        return isValidMessageTimestamp(timestamp) ? timestamp : null
     } catch {
-        return Number.MAX_SAFE_INTEGER
+        return null
     }
+}
+
+function messageTimestamp(message) {
+    if (isValidMessageTimestamp(message?.createdTimestamp)) return Number(message.createdTimestamp)
+    const createdAt = message?.createdAt?.getTime?.()
+    if (isValidMessageTimestamp(createdAt)) return createdAt
+    return snowflakeTimestamp(message?.id) ?? INVALID_MESSAGE_TIMESTAMP
 }
 
 function messageCreatedAt(message) {
     const timestamp = messageTimestamp(message)
-    return timestamp === Number.MAX_SAFE_INTEGER ? '' : new Date(timestamp).toISOString()
+    return timestamp === INVALID_MESSAGE_TIMESTAMP ? '' : new Date(timestamp).toISOString()
+}
+
+function messageCreatedTimestamp(message) {
+    const timestamp = messageTimestamp(message)
+    return timestamp === INVALID_MESSAGE_TIMESTAMP
+        ? ''
+        : `<t:${Math.floor(timestamp / 1000)}:F>`
 }
 
 function attachmentUrls(message) {
@@ -118,10 +144,12 @@ function makeNormalDeletionEmbeds({ buildCopyableMessageEmbeds, message, deleted
         : deletedBy === 'self'
             ? 'self-delete (or record unavailable)'
             : 'record unavailable'
+    const createdTimestamp = messageCreatedTimestamp(message)
     return buildCopyableMessageEmbeds({
         title: 'Message Deleted 🗑️',
         searchableText: `Deleted by: ${actor}\nMessage Author: ${author?.id ? `<@${author.id}>` : 'record unavailable'}`,
         contentLabel: 'Message', content: message?.content != null ? message.content : 'Cache Empty',
+        contentFooter: createdTimestamp ? `Created at: ${createdTimestamp}` : undefined,
         author: iconURL ? { name, iconURL } : { name },
     })
 }

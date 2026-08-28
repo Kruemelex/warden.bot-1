@@ -22,12 +22,15 @@ function buildCopyableMessageEmbeds({
     content,
     author,
     messageLink,
+    contentFooter,
     firstChunkOnlyMetadata = false,
     numberChunksWithTotal = false,
 }) {
     const normalizedContent = neutralizeCodeFences(content)
     const codeBlockOverhead = wrapCodeBlock('').length
     const messageLinkFooter = messageLink ? `\n\n**Message Link:** ${messageLink}` : ''
+    const contentFooterText = contentFooter ? `\n\n${contentFooter}` : ''
+    const finalFooter = `${messageLinkFooter}${contentFooterText}`
 
     function buildChunks(totalPages) {
         const chunks = []
@@ -47,7 +50,7 @@ function buildCopyableMessageEmbeds({
             const chunkLimit = MESSAGE_EMBED_DESCRIPTION_LIMIT
                 - header.length
                 - codeBlockOverhead
-                - messageLinkFooter.length
+                - finalFooter.length
 
             if (chunkLimit < 1) {
                 throw new Error('Message log metadata exceeds the Discord embed description limit.')
@@ -86,7 +89,7 @@ function buildCopyableMessageEmbeds({
     const embeds = []
     for (const { author: chunkAuthor, chunk, header, page } of chunks) {
         const isFinalChunk = page === chunks.length
-        const description = `${header}${wrapCodeBlock(chunk)}${isFinalChunk ? messageLinkFooter : ''}`
+        const description = `${header}${wrapCodeBlock(chunk)}${isFinalChunk ? finalFooter : ''}`
         const embed = new Discord.EmbedBuilder()
             .setTitle(page === 1 ? title : `${title} (continued ${page})`)
             .setDescription(description)
