@@ -257,9 +257,12 @@ function saveAceSubmissions(interaction, _parts, state) {
 async function syncWebsite(interaction) {
     await interaction.deferUpdate();
     const result = await requestWebsiteSync(interaction.guildId, { full: true }, { reason: 'manual' });
-    if (result.skipped === 'disabled') {
+    if (result.skipped) {
+        const message = result.skipped === 'disabled'
+            ? 'Website publishing is disabled. Enable it first to sync.'
+            : `Website sync was deferred (${result.skipped}).`;
         return interaction.followUp({
-            content: 'Website publishing is disabled. Enable it first to sync.',
+            content: message,
             flags: Discord.MessageFlags.Ephemeral,
         });
     }

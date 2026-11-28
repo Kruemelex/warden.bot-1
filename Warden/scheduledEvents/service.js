@@ -4,26 +4,21 @@ const { Routes } = require('discord.js');
 const { botIdent } = require('../../functions');
 const { createConsoleReporter } = require('../../logging/consoleReporting');
 const { normalizeScheduledEvent } = require('./eventPayload');
-const { isTransientDatabaseError } = require('../db/errorPolicy');
 const repository = require('./repository');
 const publisher = require('./websitePublisher');
+const { enqueueGuildWork, runGuildMutation, drainGuildMutations } = require('./guildMutations');
 
 const report = createConsoleReporter('Scheduled Events').forSubsystem('Lifecycle');
 const DAILY_RECONCILIATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const STARTUP_RETRY_DELAY_MS = 60_000;
-const WEBSITE_FAST_RETRY_MS = 60_000;
-const WEBSITE_SLOW_RETRY_MS = 30 * 60_000;
-const WEBSITE_FAST_RETRIES = 3;
-const MAX_TIMER_MS = 2 ** 31 - 1;
 
 let lifecycle;
 let reconciliation;
 let initialization;
 let lifecycleGeneration = 0;
 let stopping = false;
-const guildMutations = new Map();
 const websiteSettingWrites = new Map();
-const websiteRetries = new Map();
+const websiteActions = new Map();
 
 class WebsiteDeliveryError extends Error {
     constructor(cause) {
@@ -77,86 +72,9 @@ function preserveCreatorDisplayName(normalized, resolvedCreatorName, existing) {
     return { ...normalized, creatorName: existing.creatorName };
 }
 
-function enqueueGuildWork(queue, guildId, work) {
-    const key = String(guildId);
-    const previous = queue.get(key) ?? Promise.resolve();
-    const next = previous.catch(() => undefined).then(work);
-    queue.set(key, next);
-    return next.finally(() => {
-        if (queue.get(key) === next) queue.delete(key);
-    });
-}
-
-function runGuildMutation(guildId, work) {
-    return enqueueGuildWork(guildMutations, guildId, work);
-}
-
-function clearWebsiteRetry(guildId) {
-    clearTimeout(websiteRetries.get(guildId)?.timer);
-    websiteRetries.delete(guildId);
-}
-
-function scheduleWebsiteRetry(guildId, state, error) {
-    state.failures = Math.min(state.failures + 1, WEBSITE_FAST_RETRIES + 1);
-    const slow = state.failures > WEBSITE_FAST_RETRIES;
-    const delay = slow ? WEBSITE_SLOW_RETRY_MS : WEBSITE_FAST_RETRY_MS;
-    state.retryAfter = Date.now() + (error.retryAfterMs ?? 0);
-    const due = Math.max(Date.now() + delay, state.retryAfter);
-    function runWhenDue() {
-        const remaining = due - Date.now();
-        if (remaining > 0) {
-            state.timer = setTimeout(runWhenDue, Math.min(remaining, MAX_TIMER_MS));
-            state.timer.unref?.();
-            return;
-        }
-        runGuildMutation(guildId, () => syncWebsite(guildId, { reason: 'website retry' }, state))
-            .catch((retryError) => {
-                if (!stopping && !websiteRetries.get(guildId)?.timer) {
-                    report.warn('Website sync needs manual attention', retryError);
-                }
-            });
-    }
-    runWhenDue();
-    report.warn(slow ? 'Website sync waiting for next recovery check' : 'Website sync retry scheduled', undefined, {
-        retryInMs: due - Date.now(),
-    });
-}
-
-async function syncWebsite(guildId, options = {}, scheduledRetry) {
-    if (stopping) return { skipped: 'shutdown' };
-    const previous = websiteRetries.get(guildId);
-    const manual = options.reason === 'manual' || options.reason === 'sync enabled';
-    if (scheduledRetry && scheduledRetry !== previous) return { skipped: 'superseded' };
-    if (previous && !scheduledRetry && (!manual || previous.retryAfter > Date.now())) {
-        return { skipped: previous.timer ? 'retry scheduled' : 'blocked' };
-    }
-
-    clearWebsiteRetry(guildId);
-    const state = { failures: previous?.failures ?? 0, timer: undefined, retryAfter: 0 };
-    websiteRetries.set(guildId, state);
-    try {
-        const result = await publisher.requestWebsiteSync(guildId, options);
-        if (websiteRetries.get(guildId) === state) clearWebsiteRetry(guildId);
-        return result;
-    }
-    catch (error) {
-        if (websiteRetries.get(guildId) === state && (error.retryable === true || isTransientDatabaseError(error))) {
-            scheduleWebsiteRetry(guildId, state, error);
-        }
-        throw new WebsiteDeliveryError(error);
-    }
-}
-
 function schedulePublicationSync(event, guildId, reason) {
-    if (!['published', 'delete_pending'].includes(event?.publicationState)) return;
-    if (lifecycle?.automaticSyncTimers?.has(guildId)) return;
-    const timer = setTimeout(() => {
-        lifecycle?.automaticSyncTimers?.delete(guildId);
-        void requestWebsiteSync(guildId, { reason })
-            .catch((error) => report.warn('Automatic website sync failed', error));
-    }, publisher.AUTOMATIC_DEBOUNCE_MS);
-    timer.unref?.();
-    if (lifecycle) lifecycle.automaticSyncTimers.set(guildId, timer);
+    if (stopping || !['published', 'delete_pending'].includes(event?.publicationState)) return;
+    publisher.requestAutomaticWebsiteSync(guildId, reason);
 }
 
 async function handleCreate(event) {
@@ -175,11 +93,11 @@ async function handleCreate(event) {
 
 async function handleUpdate(_oldEvent, newEvent) {
     const guildId = assertWardenGuild(eventGuildId(newEvent));
-    const saved = await runGuildMutation(guildId, async () => {
+    const { saved, reason } = await runGuildMutation(guildId, async () => {
         const resolved = await normalizeWithCreatorDisplayName(newEvent);
         let normalized = resolved.event;
         const existing = await repository.getEvent(guildId, normalized.eventId);
-        if (existing?.status === 'Ended' && normalized.status !== 'Ended') return existing;
+        if (existing?.status === 'Ended' && normalized.status !== 'Ended') return { saved: existing };
         try {
             const fresh = await newEvent.client.rest.get(Routes.guildScheduledEvent(guildId, normalized.eventId), {
                 query: new URLSearchParams({ with_user_count: 'true' }),
@@ -194,14 +112,18 @@ async function handleUpdate(_oldEvent, newEvent) {
             report.warn('Interested count refresh failed; retaining stored count', error);
         }
         normalized = preserveCreatorDisplayName(normalized, resolved.resolvedCreatorName, existing);
+        const detailsChanged = !existing || Object.entries(normalized)
+            .some(([field, value]) => field !== 'interestedCount' && existing[field] !== value);
         const next = await repository.upsertEvent(normalized);
         if (next.status === 'Ended' && (!next.publicationState || next.publicationState === 'deleted')) {
             await repository.removeTerminalEvent(guildId, next.eventId);
-            return undefined;
+            return {};
         }
-        return next;
+        if (detailsChanged) return { saved: next, reason: 'event updated' };
+        if (next.interestedCount !== existing.interestedCount) return { saved: next, reason: 'interest changed' };
+        return { saved: next };
     });
-    schedulePublicationSync(saved, guildId, 'event updated');
+    if (reason) schedulePublicationSync(saved, guildId, reason);
     return saved;
 }
 
@@ -223,22 +145,25 @@ async function handleDelete(event) {
 
 async function applyInterestedCount(event, delta) {
     const guildId = assertWardenGuild(eventGuildId(event));
-    const saved = await runGuildMutation(guildId, async () => {
+    return runGuildMutation(guildId, async () => {
         const normalized = normalizeScheduledEvent(event);
         const existing = await repository.getEvent(guildId, normalized.eventId);
         if (existing?.status === 'Ended') return existing;
-        if (!existing) return repository.upsertEvent(normalized);
+        if (!existing) {
+            const saved = await repository.upsertEvent(normalized);
+            schedulePublicationSync(saved, guildId, 'interest changed');
+            return saved;
+        }
         const baseCount = Number.isSafeInteger(existing.interestedCount) && existing.interestedCount >= 0
             ? existing.interestedCount
             : Number.isSafeInteger(event?.userCount) && event.userCount >= 0 ? event.userCount : null;
         if (baseCount === null) return existing;
-        return repository.upsertEvent({
-            ...existing,
-            interestedCount: Math.max(0, baseCount + delta),
-        });
+        const interestedCount = Math.max(0, baseCount + delta);
+        if (interestedCount === existing.interestedCount) return existing;
+        const saved = await repository.upsertEvent({ ...existing, interestedCount });
+        schedulePublicationSync(saved, guildId, 'interest changed');
+        return saved;
     });
-    schedulePublicationSync(saved, guildId, 'interest changed');
-    return saved;
 }
 
 function handleUserAdd(event) {
@@ -267,25 +192,31 @@ async function reconcile(guild, { reason = 'manual' } = {}) {
             }
         }
         const terminalized = await repository.markMissingEventsEnded(guildId, eventIds);
-        const sync = await syncWebsite(guildId, { reason });
-        return { saved, terminalized, sync };
+        return { saved, terminalized };
     });
+    let sync;
+    try {
+        sync = await requestWebsiteSync(guildId, { reason });
+    }
+    catch (error) {
+        throw new WebsiteDeliveryError(error);
+    }
     report.success('Reconciliation completed', {
         reason,
         mirrored: result.saved.length,
         terminalized: result.terminalized.length,
-        sync: result.sync.skipped ?? 'published',
+        sync: sync.skipped ?? 'published',
     });
-    return { mirrored: result.saved.length, terminalized: result.terminalized.length, sync: result.sync };
+    return { mirrored: result.saved.length, terminalized: result.terminalized.length, sync };
 }
 
 function startLifecycle(guild) {
     if (lifecycle) return;
     stopping = false;
+    publisher.start();
     lifecycle = {
         guild,
         generation: lifecycleGeneration,
-        automaticSyncTimers: new Map(),
         retryTimer: undefined,
         timer: setInterval(() => {
             void reconcileLifecycle('daily');
@@ -325,11 +256,13 @@ async function initialize({ guild, guildId } = {}) {
     }
     startLifecycle(guild);
     const activeLifecycle = lifecycle;
+    if (activeLifecycle.startup) return activeLifecycle.startup;
     const attempt = (async () => {
         await repository.ensureSchema();
         return reconcile(guild, { reason: 'startup' });
     })();
     initialization = attempt;
+    activeLifecycle.startup = attempt;
     try {
         return await initialization;
     }
@@ -356,13 +289,7 @@ function setWebsiteSyncPaused(guildId, paused) {
     const key = assertWardenGuild(guildId);
     return enqueueGuildWork(websiteSettingWrites, key, async () => {
         await repository.setWebsiteSyncPaused(key, paused);
-        if (!paused) return;
-
-        const timers = lifecycle?.automaticSyncTimers;
-        clearTimeout(timers?.get(key));
-        timers?.delete(key);
-        clearWebsiteRetry(key);
-        publisher.pauseWebsiteSync(key);
+        if (paused) publisher.pauseWebsiteSync(key);
     });
 }
 
@@ -373,52 +300,47 @@ async function assertWebsiteActionsAvailable(guildId) {
     assertWebsiteConfigured();
 }
 
-async function publishEvent(guildId, eventId) {
+function changeWebsitePublication(guildId, eventId, mutate, reason) {
     const normalizedGuildId = assertWardenGuild(guildId);
-    const { event, sync } = await runGuildMutation(normalizedGuildId, async () => {
-        await assertWebsiteActionsAvailable(normalizedGuildId);
-        const event = await repository.publishEvent(normalizedGuildId, eventId);
-        const sync = await syncWebsite(normalizedGuildId, { reason: 'admin publish' });
+    return enqueueGuildWork(websiteActions, normalizedGuildId, async () => {
+        const event = await runGuildMutation(normalizedGuildId, async () => {
+            await assertWebsiteActionsAvailable(normalizedGuildId);
+            return mutate(normalizedGuildId, eventId);
+        });
+        const sync = await requestWebsiteSync(normalizedGuildId, { reason });
+        assertWebsiteSyncCompleted(sync);
         return { event, sync };
     });
-    assertWebsiteSyncCompleted(sync);
-    return { event, sync };
+}
+
+async function publishEvent(guildId, eventId) {
+    return changeWebsitePublication(guildId, eventId, repository.publishEvent, 'admin publish');
 }
 
 async function requestWebsiteDeletion(guildId, eventId) {
-    const normalizedGuildId = assertWardenGuild(guildId);
-    const { event, sync } = await runGuildMutation(normalizedGuildId, async () => {
-        await assertWebsiteActionsAvailable(normalizedGuildId);
-        const event = await repository.requestWebsiteDeletion(normalizedGuildId, eventId);
-        const sync = await syncWebsite(normalizedGuildId, { reason: 'admin delete' });
-        return { event, sync };
-    });
-    assertWebsiteSyncCompleted(sync);
-    return { event, sync };
+    return changeWebsitePublication(guildId, eventId, repository.requestWebsiteDeletion, 'admin delete');
 }
 
 function requestWebsiteSync(guildId, options) {
     const normalizedGuildId = assertWardenGuild(guildId);
-    return runGuildMutation(normalizedGuildId, () => syncWebsite(normalizedGuildId, options));
+    if (stopping) return Promise.resolve({ skipped: 'shutdown' });
+    return publisher.requestWebsiteSync(normalizedGuildId, options);
 }
 
 async function shutdown() {
     stopping = true;
-    for (const guildId of websiteRetries.keys()) clearWebsiteRetry(guildId);
     lifecycleGeneration += 1;
-    const activeLifecycle = lifecycle;
     if (lifecycle?.timer) clearInterval(lifecycle.timer);
     if (lifecycle?.retryTimer) clearTimeout(lifecycle.retryTimer);
-    for (const timer of lifecycle?.automaticSyncTimers?.values() ?? []) clearTimeout(timer);
     lifecycle = undefined;
     await Promise.allSettled([
         initialization,
         reconciliation,
-        ...guildMutations.values(),
+        publisher.shutdown(),
+        drainGuildMutations(),
         ...websiteSettingWrites.values(),
+        ...websiteActions.values(),
     ].filter(Boolean));
-    await publisher.shutdown();
-    if (activeLifecycle?.generation === lifecycleGeneration) lifecycle = undefined;
 }
 
 function assertWebsiteConfigured() {
