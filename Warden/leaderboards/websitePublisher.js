@@ -5,6 +5,7 @@ const https = require('node:https');
 const { URL } = require('node:url');
 const { createConsoleReporter } = require('../../logging/consoleReporting');
 const { listAceBoard, listSpeedrunBoard } = require('../db/leaderboards/repository');
+const { createWebsiteSyncQueue, httpFailure } = require('../websiteSyncQueue');
 const settings = require('./settings');
 const settingsRepository = require('./settingsRepository');
 
@@ -22,7 +23,6 @@ const ACE_BOARDS = Object.freeze(['chieftain', 'challenger', 'kraitmk2', 'fdl'])
 const report = createConsoleReporter('Leaderboard').forSubsystem('Website');
 
 let scheduledSync;
-const operations = new Map();
 
 function requiredEnvironment() {
     const url = String(process.env.AXI_LEADERBOARDS_SYNC_URL ?? '').trim();
@@ -162,9 +162,10 @@ async function buildSnapshot(guildId, request, revision) {
     };
 }
 
-function sendSignedPayload(config, payload) {
+function sendSignedPayload(config, payload, signal) {
     const rawBody = Buffer.from(JSON.stringify(payload), 'utf8');
     if (rawBody.length > 1024 * 1024) throw new Error('Leaderboard website payload exceeds the 1 MiB endpoint limit.');
+    const started = Date.now();
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const nonce = crypto.randomBytes(18).toString('base64url');
     const bodyHash = crypto.createHash('sha256').update(rawBody).digest('hex');
@@ -183,28 +184,43 @@ function sendSignedPayload(config, payload) {
                 'X-AXI-Signature': signature,
             },
             timeout: REQUEST_TIMEOUT_MS,
+            signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
         }, (response) => {
             let responseBytes = 0;
+            const responseChunks = [];
             response.on('data', (chunk) => {
                 responseBytes += chunk.length;
                 if (responseBytes > RESPONSE_LIMIT_BYTES) {
                     request.destroy(new Error('Leaderboard website response exceeded 64 KiB.'));
-                }
+                } else responseChunks.push(chunk);
             });
+            response.once('error', reject);
             response.on('end', () => {
                 if (response.statusCode < 200 || response.statusCode >= 300) {
-                    reject(new Error(`Leaderboard website returned HTTP ${response.statusCode}.`));
+                    reject(httpFailure('Leaderboard website', response, Buffer.concat(responseChunks).toString('utf8')));
                 }
-                else resolve({ statusCode: response.statusCode, responseBytes });
+                else {
+                    let body;
+                    try { body = JSON.parse(Buffer.concat(responseChunks).toString('utf8')); }
+                    catch {
+                        reject(Object.assign(new Error('Leaderboard website returned an invalid success response.'), { retryable: true }));
+                        return;
+                    }
+                    if (body?.accepted !== true || Number(body.revision) !== payload.revision) {
+                        reject(new Error('Leaderboard website did not confirm the submitted snapshot revision.'));
+                        return;
+                    }
+                    resolve({ statusCode: response.statusCode, responseBytes, payloadBytes: rawBody.length, durationMs: Date.now() - started });
+                }
             });
         });
-        request.once('timeout', () => request.destroy(new Error('Leaderboard website request timed out.')));
+        request.once('timeout', () => request.destroy(Object.assign(new Error('Leaderboard website request timed out.'), { code: 'ETIMEDOUT' })));
         request.once('error', reject);
         request.end(rawBody);
     });
 }
 
-async function publishRequest(guildId, request, { force = false, reason = 'automatic' } = {}) {
+async function publishRequest(guildId, request, { force = false, reason = 'automatic' }, signal) {
     const config = requiredEnvironment();
     if (!config) {
         const error = new Error('Leaderboard website publishing is not configured. Set AXI_LEADERBOARDS_SYNC_URL, AXI_LEADERBOARDS_SYNC_KEY_ID, and AXI_LEADERBOARDS_SYNC_SECRET.');
@@ -213,41 +229,41 @@ async function publishRequest(guildId, request, { force = false, reason = 'autom
     }
     const current = await settings.get(guildId);
     if (!current.websitePublishingEnabled && !force) return { skipped: 'disabled' };
+    if (signal.aborted) return { skipped: signal.reason };
     const revised = await settingsRepository.reservePublicationRevision(guildId);
     const snapshot = await buildSnapshot(guildId, request, revised.publicationRevision);
-    const response = await sendSignedPayload(config, snapshot);
+    if (signal.aborted) return { skipped: signal.reason };
+    const response = await sendSignedPayload(config, snapshot, signal);
     report.success('Snapshot published', {
         reason,
         scope: snapshot.scope,
         revision: snapshot.revision,
+        ...(process.env.AXI_WEBSITE_SYNC_DIAGNOSTICS === '1' ? {
+            payloadBytes: response.payloadBytes, durationMs: response.durationMs,
+        } : {}),
         speedrunBoards: Object.keys(snapshot.boards.speedrun).length,
         aceBoards: Object.keys(snapshot.boards.ace).length,
     });
     return { snapshot, response };
 }
 
-function requestWebsiteSync(guildId, request, options) {
-    const key = String(guildId);
-    const normalized = normalizeRequest(request);
-    const existing = operations.get(key);
-    if (existing) {
-        existing.pending = existing.pending ? mergeRequest(existing.pending, normalized) : normalized;
-        return existing.promise;
-    }
-    const state = { pending: normalized, promise: undefined };
-    state.promise = (async () => {
-        let lastResult;
-        while (state.pending) {
-            const next = state.pending;
-            state.pending = undefined;
-            lastResult = await publishRequest(key, next, options);
+const queue = createWebsiteSyncQueue({
+    send: (guildId, job, { signal }) => publishRequest(guildId, job.request, job.options, signal),
+    merge: (previous, next) => ({
+        request: mergeRequest(previous.request, next.request),
+        options: { ...previous.options, ...next.options, force: previous.options.force || next.options.force },
+    }),
+    onFailure({ error, retryMs, durationMs }) {
+        if (process.env.AXI_WEBSITE_SYNC_DIAGNOSTICS === '1') {
+            report.warn('Website delivery failed', undefined, { status: error.status, retryMs, durationMs });
         }
-        return lastResult;
-    })().finally(() => {
-        if (operations.get(key) === state) operations.delete(key);
+    },
+});
+
+function requestWebsiteSync(guildId, request, options = {}) {
+    return queue.request(String(guildId), { request: normalizeRequest(request), options }, {
+        manual: options.reason === 'manual' || options.force === true,
     });
-    operations.set(key, state);
-    return state.promise;
 }
 
 async function publishApprovedSubmission(guildId, leaderboard, submission) {
@@ -261,6 +277,7 @@ function startWebsiteSyncLifecycle(guild) {
     if (!guild?.id || scheduledSync) return;
     const run = () => requestWebsiteSync(guild.id, { full: true }, { reason: 'daily' })
         .catch((error) => report.warn('Scheduled sync failed', error));
+    queue.start();
     scheduledSync = setInterval(run, DAILY_SYNC_INTERVAL_MS);
     scheduledSync.unref?.();
 }
@@ -268,6 +285,7 @@ function startWebsiteSyncLifecycle(guild) {
 function stopWebsiteSyncLifecycle() {
     if (scheduledSync) clearInterval(scheduledSync);
     scheduledSync = undefined;
+    return queue.shutdown();
 }
 
 module.exports = {
